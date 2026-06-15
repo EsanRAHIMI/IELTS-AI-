@@ -1,6 +1,6 @@
 # shared/
 
-Cross-service constants shared (by reference) between the API, worker and web
+Cross-service constants shared (by reference) between the API and the web
 app. `sections.json` is the single source of truth for IELTS section names,
 difficulty bands, card states, pattern categories and supported AI providers.
 

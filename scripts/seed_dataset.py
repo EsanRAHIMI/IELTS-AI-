@@ -1,8 +1,8 @@
-"""Embedded IELTS starter dataset (auto-generated).
+"""Embedded IELTS starter dataset.
 
-Holds the curated seed corpus as Python constants so the seed script
-has NO runtime dependency on external data files. Regenerate from
-scripts/data/*.txt only if you edit the source lists.
+The curated seed corpus lives here as Python constants — the single source of
+truth for seeding, with NO dependency on external data files. Edit these lists
+directly to change the starter dataset, then run scripts/seed_ielts_data.py.
 
 WORDS rows:    word, pos, persian, simpleEnglish, difficulty, sections, collocations, example
 PHRASES rows:  phrase, persian, simpleEnglish, section, example

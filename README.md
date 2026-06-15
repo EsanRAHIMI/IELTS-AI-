@@ -11,7 +11,7 @@ tracking.
 ielts-ai-mastery/
 ├── web/      Next.js 14 + TypeScript + Tailwind (shadcn-style UI)  → http://localhost:3000
 ├── api/      FastAPI backend (auth, ingestion, extraction, AI, study) → http://localhost:8010
-├── worker/   OPTIONAL background worker (not needed; BackgroundTasks handle jobs)
+│          (processing runs in the API via FastAPI BackgroundTasks — no worker)
 ├── scripts/  Seed script + curated starter dataset (231 words / 109 phrases / 52 patterns)
 ├── shared/   Cross-service constants (sections, categories, statuses)
 └── docs/     MongoDB Atlas + Dokploy deployment notes
@@ -35,8 +35,7 @@ No Docker required. Runs on macOS with simple commands.
   gracefully (no AI = extraction still works, just without translations).
 - **Jobs** — every import creates a job in MongoDB and is processed via a
   **FastAPI BackgroundTask** in the same API process (status: `pending →
-  processing → done | failed`). No separate worker is needed. The `worker/`
-  folder is optional and only for future heavy/batch processing.
+  processing → done | failed`). No separate worker process is needed.
 - **Study** — simplified SM-2; cards move `new → learning → review → mastered`.
 
 ### Storage architecture (production-grade, deployment-safe)
@@ -150,15 +149,7 @@ that email to see everything immediately.
 
 ---
 
-## 4. Worker (optional — not needed)
-
-You do **not** need a worker. The API processes every import in-process via
-FastAPI BackgroundTasks. The `worker/` folder is kept only for possible future
-heavy/batch processing and is not part of normal setup or deployment.
-
----
-
-## 5. Frontend setup
+## 4. Frontend setup
 
 ```bash
 cd web
@@ -171,7 +162,7 @@ Open http://localhost:3000, register or log in (use the seeded email).
 
 ---
 
-## 6. End-to-end test flow
+## 5. End-to-end test flow
 
 1. **Start** MongoDB Atlas access, then `uvicorn` (8010) and `npm run dev` (3000).
 2. **Register / log in** at http://localhost:3000.
@@ -198,15 +189,13 @@ Open http://localhost:3000, register or log in (use the seeded email).
 |---|---|---|
 | Frontend (Next.js) | 3000 | `cd web && npm run dev` |
 | Backend (FastAPI) | 8010 | `cd api && python -m uvicorn main:app --reload --port 8010` |
-| Worker | — | optional / not required (BackgroundTasks handle processing) |
 
 ---
 
 ## Deployment (Dokploy)
 
-See **`docs/DEPLOYMENT.md`** for pushing to GitHub and deploying `web`, `api`
-as two separate Dokploy services (`web` + `api`). The worker is optional and
-not deployed.
+See **`docs/DEPLOYMENT.md`** for pushing to GitHub and deploying `web` and
+`api` as two separate Dokploy services.
 
 ## Data quality features
 

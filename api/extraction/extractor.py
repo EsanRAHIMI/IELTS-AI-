@@ -1,7 +1,7 @@
 """Core extraction engine: corpus -> ranked vocab, phrases, sentence patterns.
 
-Pure-Python and dependency-light. AI enrichment happens separately (in the
-worker) so this stage is fast and deterministic.
+Pure-Python and dependency-light. AI enrichment happens as a later step so
+this stage is fast and deterministic.
 """
 from __future__ import annotations
 import re

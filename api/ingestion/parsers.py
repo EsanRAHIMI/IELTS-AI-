@@ -1,14 +1,11 @@
 """Extract raw text from many source types: pdf, docx, txt, csv, json, url.
 
-Parsing works directly from in-memory bytes (no permanent local files). A
-temp file is only used transiently for formats that need a path, and is always
-deleted immediately afterwards.
+Parsing works directly from in-memory bytes (no local files are written).
 """
 from __future__ import annotations
 import io
 import json
 import logging
-import os
 import csv as _csv
 
 logger = logging.getLogger("ielts.ingestion")
@@ -26,13 +23,6 @@ def parse_bytes(data: bytes, kind: str | None = None) -> str:
     if kind == "json":
         return _parse_json_bytes(data)
     return data.decode("utf-8", errors="ignore")
-
-
-def parse_file(path: str, kind: str | None = None) -> str:
-    """Parse from a file path (kept for the migration script / local fallback)."""
-    kind = (kind or os.path.splitext(path)[1].lstrip(".")).lower()
-    with open(path, "rb") as f:
-        return parse_bytes(f.read(), kind)
 
 
 def _parse_pdf_bytes(data: bytes) -> str:

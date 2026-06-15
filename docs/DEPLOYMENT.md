@@ -29,9 +29,7 @@ Create **two applications** from the same repository, each with a different
 | `ielts-web` | `web` | `npm install && npm run build` | `npm run start` | 3000 |
 
 > **No worker service.** Source processing runs inside the API via FastAPI
-> BackgroundTasks, so only `api` and `web` are deployed. The `worker/` folder is
-> optional and reserved for possible future heavy/batch processing — do not
-> deploy it.
+> BackgroundTasks, so only `api` and `web` are deployed.
 
 ## 3. Production environment variables
 

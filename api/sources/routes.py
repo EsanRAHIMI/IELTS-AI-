@@ -45,9 +45,8 @@ async def _run_safe(job_id: str) -> None:
 async def _enqueue(background: BackgroundTasks, user_id: str, source_id: str) -> str:
     """Create the job in Mongo and run it via a FastAPI BackgroundTask.
 
-    No standalone worker is needed: the task runs in-process after the response
-    is returned. Atomic job claiming means the optional worker (if ever run)
-    won't double-process.
+    The task runs in-process right after the response is returned, so the UI
+    never blocks on heavy extraction.
     """
     job_id = await create_job(user_id, source_id, "process")
     background.add_task(_run_safe, job_id)

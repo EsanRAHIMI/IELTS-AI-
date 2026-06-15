@@ -7,7 +7,7 @@ A job references a source. Processing:
   4. optionally AI-enrich the top items
   5. update job + source status with logs
 
-Shared by the API (manual trigger) and the worker (polling loop).
+Runs inside the API process via a FastAPI BackgroundTask.
 """
 from __future__ import annotations
 import logging
@@ -17,7 +17,7 @@ from utils.serialization import now, oid
 from ingestion.parsers import parse_bytes, parse_url
 from extraction.extractor import extract, clean_text
 from extraction.ielts_markers import classify_sentence_section
-from jobs.schemas import JOB_PENDING, JOB_RUNNING, JOB_DONE, JOB_ERROR
+from jobs.schemas import JOB_PENDING, JOB_PROCESSING, JOB_DONE, JOB_FAILED
 from storage import s3_service
 from ai import service as ai
 
@@ -90,29 +90,24 @@ async def _store_text_and_chunks(user_id: str, source_id: str, raw: str) -> int:
 
 
 async def claim_job(job_id: str) -> dict | None:
-    """Atomically move a pending job to running. Returns the job if claimed."""
+    """Atomically move a pending job to processing. Returns the job if claimed.
+
+    Atomic claiming keeps processing idempotent even if the same job were ever
+    triggered twice (e.g. a quick double reprocess).
+    """
     return await db.jobs().find_one_and_update(
         {"_id": oid(job_id), "status": JOB_PENDING},
-        {"$set": {"status": JOB_RUNNING, "startedAt": now(), "updatedAt": now()}},
-        return_document=True,
-    )
-
-
-async def claim_next() -> dict | None:
-    """Atomically claim the oldest pending job (used by the worker poll loop)."""
-    return await db.jobs().find_one_and_update(
-        {"status": JOB_PENDING},
-        {"$set": {"status": JOB_RUNNING, "startedAt": now(), "updatedAt": now()}},
-        sort=[("createdAt", 1)],
+        {"$set": {"status": JOB_PROCESSING, "startedAt": now(), "updatedAt": now()}},
         return_document=True,
     )
 
 
 async def run_job_by_id(job_id: str) -> None:
-    """Claim (if still pending) and process a job by id. Safe to call from API."""
+    """Claim (if still pending) and process a job by id. Called from the API's
+    FastAPI BackgroundTask."""
     job = await claim_job(job_id)
     if job is None:
-        return  # already claimed/processed by the worker
+        return  # already claimed/processed
     await process_job(job)
 
 
@@ -125,7 +120,7 @@ async def process_job(job: dict) -> None:
 
     source = await db.sources().find_one({"_id": oid(source_id)})
     if not source:
-        await db.jobs().update_one({"_id": oid(job_id)}, {"$set": {"status": JOB_ERROR, "error": "source not found"}})
+        await db.jobs().update_one({"_id": oid(job_id)}, {"$set": {"status": JOB_FAILED, "error": "source not found"}})
         return
 
     try:
@@ -168,7 +163,7 @@ async def process_job(job: dict) -> None:
         logger.exception("Job %s failed", job_id)
         await db.sources().update_one({"_id": oid(source_id)}, {"$set": {"status": "error"}})
         await db.jobs().update_one(
-            {"_id": oid(job_id)}, {"$set": {"status": JOB_ERROR, "error": str(exc), "finishedAt": now()}}
+            {"_id": oid(job_id)}, {"$set": {"status": JOB_FAILED, "error": str(exc), "finishedAt": now()}}
         )
         await _log(job_id, f"ERROR: {exc}")
 
