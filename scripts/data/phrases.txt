@@ -1,0 +1,110 @@
+# phrase | persian | simpleEnglish | section | example
+a significant increase|افزایش قابل توجه|a large, noticeable rise|Writing Task 1|There was a significant increase in car ownership.
+a sharp decline|کاهش شدید|a sudden, large fall|Writing Task 1|The graph shows a sharp decline in sales.
+a steady rise|افزایش پیوسته|a slow, continuous increase|Writing Task 1|There was a steady rise in temperatures.
+a gradual decrease|کاهش تدریجی|a slow fall over time|Writing Task 1|Crime rates saw a gradual decrease.
+a dramatic fall|افت چشمگیر|a sudden very large drop|Writing Task 1|Prices experienced a dramatic fall.
+a slight fluctuation|نوسان جزئی|a small irregular change|Writing Task 1|There was a slight fluctuation in demand.
+reach a peak|به اوج رسیدن|to arrive at the highest point|Writing Task 1|Numbers reached a peak in July.
+the lowest point|پایین‌ترین نقطه|the minimum level|Writing Task 1|Sales hit the lowest point in winter.
+remain stable|ثابت ماندن|to stay at the same level|Writing Task 1|Prices remained stable throughout the year.
+level off|تثبیت شدن|to stop rising or falling|Writing Task 1|The figures levelled off after 2010.
+the graph illustrates|نمودار نشان می‌دهد|the graph shows clearly|Writing Task 1|The graph illustrates changes in population.
+the chart shows|نمودار نشان می‌دهد|the chart presents|Writing Task 1|The chart shows energy consumption by source.
+the table provides information about|جدول اطلاعاتی درباره ... ارائه می‌دهد|the table gives details on|Writing Task 1|The table provides information about housing costs.
+the data reveals|داده‌ها آشکار می‌کنند|the data clearly shows|Writing Task 1|The data reveals a clear seasonal pattern.
+compared with|در مقایسه با|when looked at next to|Writing Task 1|Compared with 2000, prices doubled.
+in comparison|در مقایسه|when compared|Writing Task 1|In comparison, rural areas grew slowly.
+the figure for|رقم مربوط به|the number for|Writing Task 1|The figure for imports rose sharply.
+accounted for|تشکیل می‌داد / شامل می‌شد|made up a part of a total|Writing Task 1|Coal accounted for 40 percent of energy.
+the proportion of|نسبت / سهم ...|the share of|Writing Task 1|The proportion of young people rose.
+overall the trend was upward|به طور کلی روند صعودی بود|in general it increased|Writing Task 1|Overall, the trend was upward.
+it is widely believed that|به طور گسترده اعتقاد بر این است که|many people think that|Writing Task 2|It is widely believed that exercise improves mood.
+it is often argued that|اغلب استدلال می‌شود که|people frequently claim that|Writing Task 2|It is often argued that tourism harms the environment.
+there is no doubt that|شکی نیست که|it is certain that|Writing Task 2|There is no doubt that education matters.
+this can be attributed to|این را می‌توان به ... نسبت داد|this is caused by|Writing Task 2|This can be attributed to better healthcare.
+as a result|در نتیجه|because of this|Writing Task 2|As a result, pollution increased.
+due to the fact that|به دلیل اینکه|because|Writing Task 2|Costs rose due to the fact that demand grew.
+on the one hand|از یک سو|looking at one side|Writing Task 2|On the one hand, cars are convenient.
+on the other hand|از سوی دیگر|looking at the other side|Writing Task 2|On the other hand, they cause pollution.
+in contrast|در مقابل|showing a difference|Writing Task 2|In contrast, public transport is cheaper.
+to some extent|تا حدی|partly but not completely|Writing Task 2|I agree with this to some extent.
+to a large extent|تا حد زیادی|mostly|Writing Task 2|This is true to a large extent.
+play a vital role|نقش حیاتی ایفا کردن|to be very important|Writing Task 2|Parents play a vital role in education.
+a wide range of|طیف گسترده‌ای از|many different|Writing Task 2|The city offers a wide range of services.
+a growing number of|تعداد رو به افزایشی از|an increasing amount of|Writing Task 2|A growing number of people work from home.
+the vast majority of|اکثریت قریب به اتفاق|almost all of|Writing Task 2|The vast majority of students passed.
+in terms of|از نظر / از حیث|regarding|Writing Task 2|In terms of cost, this is the best option.
+with regard to|در مورد / در خصوص|concerning|Writing Task 2|With regard to safety, more is needed.
+take into account|در نظر گرفتن|to consider|Writing Task 2|We must take into account the cost.
+in addition to|علاوه بر|as well as|Writing Task 2|In addition to cost, time matters.
+furthermore|علاوه بر این|moreover|Writing Task 2|Furthermore, it improves health.
+moreover|به علاوه|in addition|Writing Task 2|Moreover, the plan saves money.
+nevertheless|با این حال|despite that|Writing Task 2|Nevertheless, problems remain.
+consequently|در نتیجه|as a result|Writing Task 2|Consequently, prices rose.
+for instance|برای مثال|for example|Writing Task 2|Many cities, for instance Tokyo, are crowded.
+in conclusion|در نتیجه / در پایان|to sum up|Writing Task 2|In conclusion, both views have merit.
+to sum up|به طور خلاصه|in summary|Writing Task 2|To sum up, the benefits outweigh the costs.
+the benefits outweigh the drawbacks|مزایا بر معایب می‌چربد|advantages are greater than disadvantages|Writing Task 2|Overall, the benefits outweigh the drawbacks.
+a double-edged sword|شمشیر دولبه|something with good and bad sides|Writing Task 2|Technology is a double-edged sword.
+from my perspective|از دیدگاه من|in my view|Writing Task 2|From my perspective, both are important.
+in my opinion|به نظر من|I think that|Writing Task 2|In my opinion, the policy is unfair.
+i firmly believe that|من قاطعانه معتقدم که|I strongly think that|Writing Task 2|I firmly believe that education is key.
+it could be argued that|می‌توان استدلال کرد که|one might claim that|Writing Task 2|It could be argued that the cost is too high.
+a case in point|نمونه بارز|a clear example|Writing Task 2|A case in point is renewable energy.
+last but not least|آخرین اما نه کم‌اهمیت‌ترین|finally and importantly|Writing Task 2|Last but not least, we must consider safety.
+as far as i am concerned|تا جایی که به من مربوط است|in my opinion|Writing Task 2|As far as I am concerned, this is essential.
+to be honest|راستش را بخواهید|honestly|Speaking|To be honest, I'm not really into sports.
+i would say|من می‌گویم|I think|Speaking|I would say it depends on the situation.
+it depends on|بستگی دارد به|it varies according to|Speaking|It depends on the weather, really.
+that's a good question|سوال خوبی است|a useful thing to ask|Speaking|That's a good question, let me think.
+off the top of my head|بدون فکر قبلی|without preparation|Speaking|Off the top of my head, I'd say three.
+now that you mention it|حالا که گفتید|since you brought it up|Speaking|Now that you mention it, I do remember that.
+i'm not really into|خیلی علاقه‌ای ندارم به|I don't really like|Speaking|I'm not really into cooking.
+i'm a big fan of|طرفدار پر و پا قرص ... هستم|I really like|Speaking|I'm a big fan of live music.
+it's hard to say|گفتنش سخت است|it is difficult to decide|Speaking|It's hard to say which is better.
+generally speaking|به طور کلی|in most cases|Speaking|Generally speaking, I prefer quiet places.
+more often than not|اغلب اوقات|usually|Speaking|More often than not, I walk to work.
+when it comes to|وقتی صحبت از ... می‌شود|regarding|Speaking|When it comes to food, I'm quite fussy.
+i'd rather|ترجیح می‌دهم|I prefer to|Speaking|I'd rather stay home tonight.
+something i really enjoy|چیزی که واقعاً از آن لذت می‌برم|an activity I love|Speaking|Reading is something I really enjoy.
+as a child|در کودکی|when I was young|Speaking|As a child, I loved drawing.
+looking back|با نگاه به گذشته|thinking about the past|Speaking|Looking back, it was a great decision.
+according to|طبق / بر اساس|as stated by|Reading|According to the study, sleep is vital.
+research suggests that|تحقیقات نشان می‌دهد که|studies indicate that|Reading|Research suggests that exercise reduces stress.
+studies have shown that|مطالعات نشان داده‌اند که|research has proven that|Reading|Studies have shown that reading improves memory.
+play a key role in|نقش کلیدی در ... داشتن|to be important for|Reading|Bees play a key role in agriculture.
+give rise to|باعث ایجاد شدن|to cause|Reading|This gave rise to new industries.
+result in|منجر شدن به|to cause as a result|Reading|Higher temperatures result in melting ice.
+lead to|منجر شدن به|to cause|Writing Task 2|Poor diet can lead to illness.
+stem from|ناشی شدن از|to come from|Writing Task 2|The problem stems from poverty.
+contribute to|کمک کردن به|to add to a result|Writing Task 2|Cars contribute to pollution.
+have an impact on|تأثیر داشتن بر|to affect|Writing Task 2|Tourism has an impact on local culture.
+cope with|کنار آمدن با|to deal with|Speaking|It's hard to cope with stress.
+deal with|رسیدگی کردن به|to handle|Writing Task 2|Governments must deal with this issue.
+bring about|به وجود آوردن|to cause to happen|Writing Task 2|Technology brought about huge change.
+carry out|انجام دادن|to perform a task|Reading|Scientists carried out an experiment.
+point out|اشاره کردن|to mention|Writing Task 2|Critics point out several flaws.
+rule out|رد کردن / کنار گذاشتن|to remove as a possibility|Reading|We cannot rule out this option.
+account for|توضیح دادن / تشکیل دادن|to explain or make up|Writing Task 1|This factor accounts for the rise.
+keep up with|همگام شدن با|to stay level with|Speaking|It's hard to keep up with the news.
+make up for|جبران کردن|to compensate for|Speaking|Hard work can make up for a late start.
+in the long run|در دراز مدت|over a long period|Writing Task 2|In the long run, this saves money.
+in the short term|در کوتاه مدت|over a short period|Writing Task 2|In the short term, costs will rise.
+a wide variety of|تنوع گسترده‌ای از|many different kinds of|Writing Task 2|The course covers a wide variety of topics.
+a great deal of|مقدار زیادی از|a lot of|Writing Task 2|This requires a great deal of effort.
+the number of|تعداد ...|the count of|Writing Task 1|The number of tourists doubled.
+the amount of|مقدار ...|the quantity of|Writing Task 1|The amount of waste increased.
+at the same time|در عین حال|simultaneously|Writing Task 2|At the same time, costs rose.
+in other words|به عبارت دیگر|put differently|Writing Task 2|In other words, the plan failed.
+needless to say|ناگفته نماند|obviously|Writing Task 2|Needless to say, safety comes first.
+by and large|روی هم رفته|mostly|Writing Task 2|By and large, the policy succeeded.
+all things considered|با در نظر گرفتن همه چیز|after thinking about everything|Writing Task 2|All things considered, it was worthwhile.
+there is a growing concern about|نگرانی فزاینده‌ای درباره ... وجود دارد|people are increasingly worried about|Writing Task 2|There is a growing concern about air quality.
+it is high time that|وقت آن رسیده که|it is the right moment to|Writing Task 2|It is high time that we acted on this.
+play a part in|نقش داشتن در|to contribute to|Writing Task 2|Diet plays a part in good health.
+shed light on|روشن کردن|to help explain|Reading|The study sheds light on the issue.
+in light of|با توجه به|considering|Writing Task 2|In light of this, changes are needed.
+pave the way for|راه را برای ... هموار کردن|to make something possible|Writing Task 2|This paved the way for reform.
+strike a balance|تعادل برقرار کردن|to find a fair middle point|Writing Task 2|We must strike a balance between the two.
+bear in mind|در نظر داشتن|to remember|Writing Task 2|We should bear in mind the cost.

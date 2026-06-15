@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --background: 40 33% 98%;
+    --foreground: 222 24% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 24% 12%;
+    --primary: 222 47% 18%;
+    --primary-foreground: 40 33% 98%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 24% 18%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 38 92% 50%;
+    --accent-foreground: 222 47% 12%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 38%;
+    --success-foreground: 0 0% 100%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 222 47% 18%;
+    --radius: 0.8rem;
+  }
+
+  .dark {
+    --background: 222 30% 7%;
+    --foreground: 40 20% 96%;
+    --card: 222 28% 10%;
+    --card-foreground: 40 20% 96%;
+    --primary: 40 33% 96%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 40 20% 96%;
+    --muted: 222 20% 15%;
+    --muted-foreground: 220 12% 60%;
+    --accent: 38 92% 52%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 62% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 65% 45%;
+    --success-foreground: 0 0% 100%;
+    --border: 222 18% 20%;
+    --input: 222 18% 22%;
+    --ring: 40 33% 80%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Persian text */
+.farsi {
+  direction: rtl;
+  font-family: "Vazirmatn", "Tahoma", system-ui, sans-serif;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }

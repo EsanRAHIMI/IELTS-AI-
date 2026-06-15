@@ -1,0 +1,19 @@
+{
+  "ieltsSections": ["Writing Task 1", "Writing Task 2", "Reading", "Listening", "Speaking"],
+  "difficulties": ["A2", "B1", "B2", "C1", "C2"],
+  "cardStatuses": ["new", "learning", "review", "mastered"],
+  "cardTypes": ["word", "phrase", "sentence_pattern"],
+  "reviewGrades": ["again", "hard", "good", "easy"],
+  "patternCategories": [
+    "Writing Task 1 trend description",
+    "Writing Task 1 comparison",
+    "Writing Task 2 opinion",
+    "Writing Task 2 cause/effect",
+    "Writing Task 2 advantage/disadvantage",
+    "Speaking fluency phrases",
+    "Speaking personal experience phrases",
+    "Reading academic structures",
+    "Listening functional phrases"
+  ],
+  "aiProviders": ["openai", "anthropic", "ollama"]
+}

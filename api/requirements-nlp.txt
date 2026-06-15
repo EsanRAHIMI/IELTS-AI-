@@ -1,0 +1,11 @@
+# OPTIONAL extras for higher-quality extraction.
+# Recommended on Python 3.11 or 3.12 (spaCy has no wheels for 3.13/3.14 yet).
+#
+#   pip install -r requirements-nlp.txt
+#   python -m spacy download en_core_web_sm
+#
+# Without these, the app still works: extraction uses a regex-based
+# tokenizer/lemmatizer fallback, and CSV parsing uses the standard library.
+spacy>=3.7,<3.9
+pandas>=2.2.0
+lxml>=5.0.0
