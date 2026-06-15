@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UploadCloud, Link2, FileText, RefreshCw, Trash2, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { UploadCloud, Link2, FileText, RefreshCw, Trash2, Loader2, CheckCircle2, AlertCircle, Download, Eye } from "lucide-react";
 import { api, BASE_URL, getToken } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import type { Source, Job } from "@/types";
@@ -22,6 +22,16 @@ export default function ImportPage() {
   const [url, setUrl] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [activeJob, setActiveJob] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+
+  async function download(id: string) {
+    try {
+      const res = await api<{ url: string }>(`/sources/${id}/download-url`);
+      window.open(res.url, "_blank");
+    } catch (e: any) {
+      toast({ title: "Download unavailable", description: e.message, variant: "error" });
+    }
+  }
 
   // Poll while any source is processing.
   useEffect(() => {
@@ -155,11 +165,15 @@ export default function ImportPage() {
               <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{s.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {s.type.toUpperCase()} · {s.stats?.wordsExtracted ?? 0} words extracted
+                <p className="truncate text-xs text-muted-foreground">
+                  {(s.originalFileName || s.type).toString()} · {s.type.toUpperCase()} · {s.stats?.wordsExtracted ?? 0} words
                 </p>
               </div>
               <StatusBadge status={s.status} />
+              <Button variant="ghost" size="icon" onClick={() => setPreviewId(s.id)} title="Preview text"><Eye className="h-4 w-4" /></Button>
+              {s.s3Key && (
+                <Button variant="ghost" size="icon" onClick={() => download(s.id)} title="Download original"><Download className="h-4 w-4" /></Button>
+              )}
               <Button variant="ghost" size="icon" onClick={() => setActiveJob(s.id)} title="Logs"><FileText className="h-4 w-4" /></Button>
               <Button variant="ghost" size="icon" onClick={() => reprocess(s.id)} title="Reprocess"><RefreshCw className="h-4 w-4" /></Button>
               <Button variant="ghost" size="icon" onClick={() => remove(s.id)} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -169,6 +183,7 @@ export default function ImportPage() {
       </Card>
 
       <JobLogsDialog sourceId={activeJob} onClose={() => setActiveJob(null)} />
+      <SourcePreviewDialog sourceId={previewId} onClose={() => setPreviewId(null)} />
     </div>
   );
 }
@@ -205,6 +220,32 @@ function JobLogsDialog({ sourceId, onClose }: { sourceId: string | null; onClose
         )}
         {job?.error && <div className="text-destructive">ERROR: {job.error}</div>}
       </div>
+    </Dialog>
+  );
+}
+
+function SourcePreviewDialog({ sourceId, onClose }: { sourceId: string | null; onClose: () => void }) {
+  const { data: source, loading } = useApiData<Source>(sourceId ? `/sources/${sourceId}` : null);
+  return (
+    <Dialog open={!!sourceId} onOpenChange={(v) => !v && onClose()}>
+      <DialogHeader><DialogTitle>{source?.title || "Source text"}</DialogTitle></DialogHeader>
+      {loading || !source ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Badge variant="secondary">{source.type.toUpperCase()}</Badge>
+            {source.originalFileName && <Badge variant="outline">{source.originalFileName}</Badge>}
+            <Badge variant="outline">{(source.charCount ?? 0).toLocaleString()} chars</Badge>
+            {source.chunkCount != null && <Badge variant="outline">{source.chunkCount} chunks</Badge>}
+            {source.storage && <Badge variant="outline">stored: {source.storage}</Badge>}
+          </div>
+          <div className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md bg-secondary/50 p-3 text-sm leading-relaxed">
+            {(source.rawText || "").trim() || <span className="text-muted-foreground">No extracted text yet.</span>}
+          </div>
+          <p className="text-xs text-muted-foreground">Text is stored in MongoDB; the original file is stored in S3.</p>
+        </div>
+      )}
     </Dialog>
   );
 }

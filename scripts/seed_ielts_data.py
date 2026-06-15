@@ -26,25 +26,13 @@ sys.path.insert(0, API_DIR)
 from dotenv import load_dotenv  # noqa: E402
 load_dotenv(os.path.join(API_DIR, ".env"))
 
-DATA_DIR = os.path.join(ROOT, "scripts", "data")
+# Seed data is embedded (no runtime dependency on scripts/data files).
+from seed_dataset import WORDS, PHRASES, PATTERNS  # noqa: E402
+
 SECTION_MAP = {
     "W1": "Writing Task 1", "W2": "Writing Task 2",
     "R": "Reading", "L": "Listening", "S": "Speaking",
 }
-
-
-def _read_rows(path: str, n_fields: int) -> list[list[str]]:
-    rows = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split("|")
-            if len(parts) < n_fields:
-                parts += [""] * (n_fields - len(parts))
-            rows.append([p.strip() for p in parts[:n_fields]])
-    return rows
 
 
 def _expand_sections(codes: str) -> list[str]:
@@ -61,9 +49,8 @@ def _expand_sections(codes: str) -> list[str]:
 def load_words() -> list[dict]:
     from extraction import scoring
     from utils.serialization import now
-    rows = _read_rows(os.path.join(DATA_DIR, "words.txt"), 8)
     docs = []
-    for word, pos, persian, english, difficulty, sections, collocs, example in rows:
+    for word, pos, persian, english, difficulty, sections, collocs, example in WORDS:
         use_cases = _expand_sections(sections)
         collocations = [c.strip() for c in collocs.split(",") if c.strip()]
         ps = scoring.score_word(
@@ -85,9 +72,8 @@ def load_words() -> list[dict]:
 def load_phrases() -> list[dict]:
     from extraction import scoring
     from utils.serialization import now
-    rows = _read_rows(os.path.join(DATA_DIR, "phrases.txt"), 5)
     docs = []
-    for phrase, persian, english, section, example in rows:
+    for phrase, persian, english, section, example in PHRASES:
         length = len(phrase.split())
         ps = scoring.score_phrase(frequency=6, confidence=0.95, length=length, category=section)
         docs.append({
@@ -104,9 +90,8 @@ def load_phrases() -> list[dict]:
 def load_patterns() -> list[dict]:
     from extraction import scoring
     from utils.serialization import now
-    rows = _read_rows(os.path.join(DATA_DIR, "patterns.txt"), 5)
     docs = []
-    for template, category, section, notes, example in rows:
+    for template, category, section, notes, example in PATTERNS:
         usefulness = 80 if category.startswith(("Writing", "Speaking")) else 60
         ps = scoring.score_pattern(usefulness=usefulness, category=category)
         docs.append({

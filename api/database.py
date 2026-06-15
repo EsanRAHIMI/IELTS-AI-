@@ -49,6 +49,10 @@ def patterns():
     return col("sentence_patterns")
 
 
+def source_chunks():
+    return col("source_chunks")
+
+
 def cards():
     return col("learning_cards")
 
@@ -76,6 +80,8 @@ async def init_indexes() -> None:
         await cards().create_index([("userId", 1), ("nextReviewAt", 1)])
         await cards().create_index([("userId", 1), ("status", 1)])
         await sources().create_index([("userId", 1), ("createdAt", -1)])
+        await source_chunks().create_index([("sourceId", 1), ("index", 1)])
+        await source_chunks().create_index([("userId", 1)])
         await jobs().create_index([("status", 1), ("createdAt", 1)])
         await reviews().create_index([("userId", 1), ("reviewedAt", -1)])
         logger.info("Mongo indexes ensured")

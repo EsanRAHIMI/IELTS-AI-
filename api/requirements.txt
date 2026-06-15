@@ -16,8 +16,10 @@ openai>=1.59.0
 anthropic>=0.42.0
 python-dotenv>=1.0.1
 email-validator>=2.2.0
+boto3>=1.35.0
 
 # Optional NLP/data extras (better lemmatisation + pandas CSV parsing) live in
 # requirements-nlp.txt. They are NOT required: the extractor falls back to a
 # built-in tokenizer/lemmatizer and CSV uses the stdlib if they are absent.
 # Install them only on Python <= 3.12:  pip install -r requirements-nlp.txt
+boto3

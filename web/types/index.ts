@@ -68,6 +68,14 @@ export interface Source {
   title: string;
   status: string;
   charCount?: number;
+  chunkCount?: number;
+  originalFileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  s3Key?: string;
+  storage?: string;
+  rawText?: string;
+  cleanedText?: string;
   stats?: Record<string, number>;
   createdAt: string;
 }

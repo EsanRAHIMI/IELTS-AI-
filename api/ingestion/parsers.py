@@ -1,45 +1,54 @@
-"""Extract raw text from many source types: pdf, docx, txt, csv, json, url."""
+"""Extract raw text from many source types: pdf, docx, txt, csv, json, url.
+
+Parsing works directly from in-memory bytes (no permanent local files). A
+temp file is only used transiently for formats that need a path, and is always
+deleted immediately afterwards.
+"""
 from __future__ import annotations
+import io
 import json
 import logging
 import os
+import csv as _csv
 
 logger = logging.getLogger("ielts.ingestion")
 
 
-def parse_file(path: str, kind: str | None = None) -> str:
-    kind = (kind or os.path.splitext(path)[1].lstrip(".")).lower()
+def parse_bytes(data: bytes, kind: str | None = None) -> str:
+    """Extract text from raw file bytes. Preferred entry point (no disk I/O)."""
+    kind = (kind or "txt").lower().lstrip(".")
     if kind == "pdf":
-        return _parse_pdf(path)
+        return _parse_pdf_bytes(data)
     if kind in ("docx", "doc"):
-        return _parse_docx(path)
+        return _parse_docx_bytes(data)
     if kind == "csv":
-        return _parse_csv(path)
+        return _parse_csv_bytes(data)
     if kind == "json":
-        return _parse_json(path)
-    # txt and anything else: read as text
-    return _parse_txt(path)
+        return _parse_json_bytes(data)
+    return data.decode("utf-8", errors="ignore")
 
 
-def _parse_txt(path: str) -> str:
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        return f.read()
+def parse_file(path: str, kind: str | None = None) -> str:
+    """Parse from a file path (kept for the migration script / local fallback)."""
+    kind = (kind or os.path.splitext(path)[1].lstrip(".")).lower()
+    with open(path, "rb") as f:
+        return parse_bytes(f.read(), kind)
 
 
-def _parse_pdf(path: str) -> str:
+def _parse_pdf_bytes(data: bytes) -> str:
     import fitz  # PyMuPDF
 
     parts = []
-    with fitz.open(path) as doc:
+    with fitz.open(stream=data, filetype="pdf") as doc:
         for page in doc:
             parts.append(page.get_text("text"))
     return "\n".join(parts)
 
 
-def _parse_docx(path: str) -> str:
+def _parse_docx_bytes(data: bytes) -> str:
     import docx
 
-    d = docx.Document(path)
+    d = docx.Document(io.BytesIO(data))
     parts = [p.text for p in d.paragraphs]
     for table in d.tables:
         for row in table.rows:
@@ -47,30 +56,29 @@ def _parse_docx(path: str) -> str:
     return "\n".join(parts)
 
 
-def _parse_csv(path: str) -> str:
-    # Prefer pandas if available; otherwise use the stdlib csv module.
+def _parse_csv_bytes(data: bytes) -> str:
+    text = data.decode("utf-8", errors="ignore")
     try:
         import pandas as pd
 
-        df = pd.read_csv(path, on_bad_lines="skip")
+        df = pd.read_csv(io.StringIO(text), on_bad_lines="skip")
         return df.to_string(index=False)
     except ImportError:
-        import csv
-
         rows = []
-        with open(path, "r", encoding="utf-8", errors="ignore", newline="") as f:
-            for row in csv.reader(f):
-                rows.append(" ".join(cell for cell in row if cell))
+        for row in _csv.reader(io.StringIO(text)):
+            rows.append(" ".join(cell for cell in row if cell))
         return "\n".join(rows)
     except Exception as exc:
-        logger.warning("CSV parse failed (%s); falling back to raw read", exc)
-        return _parse_txt(path)
+        logger.warning("CSV parse failed (%s); falling back to raw text", exc)
+        return text
 
 
-def _parse_json(path: str) -> str:
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        data = json.load(f)
-    return _flatten_json(data)
+def _parse_json_bytes(data: bytes) -> str:
+    try:
+        obj = json.loads(data.decode("utf-8", errors="ignore"))
+    except Exception:
+        return data.decode("utf-8", errors="ignore")
+    return _flatten_json(obj)
 
 
 def _flatten_json(data) -> str:

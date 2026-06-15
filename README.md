@@ -11,7 +11,7 @@ tracking.
 ielts-ai-mastery/
 ├── web/      Next.js 14 + TypeScript + Tailwind (shadcn-style UI)  → http://localhost:3000
 ├── api/      FastAPI backend (auth, ingestion, extraction, AI, study) → http://localhost:8010
-├── worker/   Python background worker (polls MongoDB jobs)
+├── worker/   OPTIONAL background worker (not needed; BackgroundTasks handle jobs)
 ├── scripts/  Seed script + curated starter dataset (231 words / 109 phrases / 52 patterns)
 ├── shared/   Cross-service constants (sections, categories, statuses)
 └── docs/     MongoDB Atlas + Dokploy deployment notes
@@ -33,10 +33,33 @@ No Docker required. Runs on macOS with simple commands.
 - **AI layer (`api/ai/`)** — provider abstraction (`openai | anthropic |
   ollama`). The app works with **only one** provider configured, and degrades
   gracefully (no AI = extraction still works, just without translations).
-- **Jobs** — every import creates a job. The API processes it in-process
-  *and* a standalone `worker/` can poll the same queue. Atomic claiming
-  prevents double processing, so heavy work never blocks the UI.
+- **Jobs** — every import creates a job in MongoDB and is processed via a
+  **FastAPI BackgroundTask** in the same API process (status: `pending →
+  processing → done | failed`). No separate worker is needed. The `worker/`
+  folder is optional and only for future heavy/batch processing.
 - **Study** — simplified SM-2; cards move `new → learning → review → mastered`.
+
+### Storage architecture (production-grade, deployment-safe)
+
+- **MongoDB Atlas is the source of truth for all structured text & data**:
+  users, sources, raw + cleaned text, `source_chunks`, vocabulary, phrases,
+  sentence patterns, AI explanations/Persian meanings/examples, learning cards,
+  review history, daily plans, progress, processing jobs + logs.
+- **Amazon S3 stores all original/binary files** (PDF, DOCX, TXT, CSV, JSON,
+  future images/audio/exports). Mongo keeps only the S3 object **key + metadata**
+  — never the binary.
+- **No permanent local storage.** Uploads stream straight to S3; parsing happens
+  in memory. `UPLOAD_DIR` is only a transient temp/dev-fallback dir and is safe
+  to wipe. The app runs fine after deleting `api/storage/` and needs **no
+  persistent volume** in deployment.
+- **Seed data is embedded** in `scripts/seed_dataset.py` (Python constants) — no
+  runtime dependency on `scripts/data`.
+- If AWS vars are unset, a local fallback under `UPLOAD_DIR` is used so dev still
+  works; configure S3 for production.
+
+Upload flow: receive file → upload original to S3 → parse bytes in memory →
+store raw/cleaned text + chunks + extraction results in Mongo. Downloads use a
+short-lived **presigned URL** from `GET /sources/{id}/download-url`.
 
 ---
 
@@ -88,6 +111,9 @@ tokenizer/lemmatizer, and CSV parsing uses the standard library.
 | `OPENAI_API_KEY` | **Your OpenAI key** (if `AI_PROVIDER=openai`). |
 | `ANTHROPIC_API_KEY` | **Your Anthropic key** (if `AI_PROVIDER=anthropic`). |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | For local models (no key needed). |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | **Your S3 credentials** (original files go here). |
+| `AWS_REGION` / `AWS_S3_BUCKET` | S3 region + bucket name. |
+| `AWS_S3_PUBLIC_BASE_URL` | Optional CloudFront/CDN base for object URLs. |
 
 > The app runs fine with **no** AI key — you simply won't get auto
 > translations/examples until you add a key and click "Regenerate".
@@ -124,15 +150,11 @@ that email to see everything immediately.
 
 ---
 
-## 4. Start the worker (optional but recommended)
+## 4. Worker (optional — not needed)
 
-The API already processes imports in-process. For heavier corpora, run the
-dedicated worker in a second terminal (uses the same api venv):
-
-```bash
-cd api && source .venv/bin/activate
-cd ../worker && python worker.py
-```
+You do **not** need a worker. The API processes every import in-process via
+FastAPI BackgroundTasks. The `worker/` folder is kept only for possible future
+heavy/batch processing and is not part of normal setup or deployment.
 
 ---
 
@@ -175,15 +197,16 @@ Open http://localhost:3000, register or log in (use the seeded email).
 | Service | Port | Command |
 |---|---|---|
 | Frontend (Next.js) | 3000 | `cd web && npm run dev` |
-| Backend (FastAPI) | 8010 | `cd api && uvicorn main:app --reload --port 8010` |
-| Worker | — | `cd worker && python worker.py` |
+| Backend (FastAPI) | 8010 | `cd api && python -m uvicorn main:app --reload --port 8010` |
+| Worker | — | optional / not required (BackgroundTasks handle processing) |
 
 ---
 
 ## Deployment (Dokploy)
 
 See **`docs/DEPLOYMENT.md`** for pushing to GitHub and deploying `web`, `api`
-and `worker` as three separate Dokploy services, plus production env notes.
+as two separate Dokploy services (`web` + `api`). The worker is optional and
+not deployed.
 
 ## Data quality features
 

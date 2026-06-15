@@ -14,9 +14,11 @@ import logging
 
 import database as db
 from utils.serialization import now, oid
-from ingestion.parsers import parse_file, parse_url
-from extraction.extractor import extract
+from ingestion.parsers import parse_bytes, parse_url
+from extraction.extractor import extract, clean_text
+from extraction.ielts_markers import classify_sentence_section
 from jobs.schemas import JOB_PENDING, JOB_RUNNING, JOB_DONE, JOB_ERROR
+from storage import s3_service
 from ai import service as ai
 
 logger = logging.getLogger("ielts.jobs")
@@ -24,6 +26,7 @@ logger = logging.getLogger("ielts.jobs")
 AI_ENRICH_TOP_WORDS = 15
 AI_ENRICH_TOP_PHRASES = 8
 AI_ENRICH_TOP_PATTERNS = 5
+CHUNK_WORDS = 800
 
 
 async def _log(job_id, message: str):
@@ -35,16 +38,55 @@ async def _log(job_id, message: str):
 
 
 async def _resolve_text(source: dict) -> tuple[str, str | None]:
-    """Return (text, title_override)."""
+    """Return (text, title_override). Pulls binaries from S3; never reads
+    permanent local project storage."""
     stype = source.get("type")
-    if source.get("rawText"):
-        return source["rawText"], None
+    # File-backed sources: download bytes from S3 and parse in memory.
+    if source.get("kind") == "file" or source.get("s3Key"):
+        data = s3_service.download_bytes(source["s3Key"])
+        return parse_bytes(data, source.get("fileKind") or stype), None
     if stype == "url":
         title, text = await parse_url(source["url"])
         return text, title
-    if stype == "file":
-        return parse_file(source["filePath"], source.get("fileKind")), None
+    # Pasted text: rawText is the original input.
     return source.get("rawText", ""), None
+
+
+def _build_chunks(cleaned: str) -> list[dict]:
+    """Split cleaned text into word-bounded chunks with section + token count."""
+    words = cleaned.split()
+    chunks: list[dict] = []
+    for i in range(0, len(words), CHUNK_WORDS):
+        piece = " ".join(words[i : i + CHUNK_WORDS])
+        if not piece.strip():
+            continue
+        chunks.append({
+            "index": len(chunks),
+            "text": piece,
+            "section": classify_sentence_section(piece[:600]),
+            "tokenCount": len(piece.split()),
+        })
+    return chunks
+
+
+async def _store_text_and_chunks(user_id: str, source_id: str, raw: str) -> int:
+    """Persist raw + cleaned text on the source and chunks in source_chunks."""
+    cleaned = clean_text(raw)
+    chunks = _build_chunks(cleaned)
+    await db.sources().update_one(
+        {"_id": oid(source_id)},
+        {"$set": {
+            "rawText": raw[:500000], "cleanedText": cleaned[:500000],
+            "charCount": len(raw), "chunkCount": len(chunks), "updatedAt": now(),
+        }},
+    )
+    # Replace any previous chunks (idempotent on reprocess).
+    await db.source_chunks().delete_many({"sourceId": source_id})
+    if chunks:
+        await db.source_chunks().insert_many(
+            [{**c, "sourceId": source_id, "userId": user_id, "createdAt": now()} for c in chunks]
+        )
+    return len(chunks)
 
 
 async def claim_job(job_id: str) -> dict | None:
@@ -91,11 +133,8 @@ async def process_job(job: dict) -> None:
         text, title_override = await _resolve_text(source)
         if title_override and not source.get("title"):
             await db.sources().update_one({"_id": oid(source_id)}, {"$set": {"title": title_override}})
-        await db.sources().update_one(
-            {"_id": oid(source_id)},
-            {"$set": {"rawText": text[:500000], "charCount": len(text)}},
-        )
-        await _log(job_id, f"Extracted {len(text)} characters of text")
+        n_chunks = await _store_text_and_chunks(user_id, source_id, text)
+        await _log(job_id, f"Extracted {len(text)} characters of text into {n_chunks} chunks")
 
         result = extract(text)
         await _log(

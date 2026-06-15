@@ -1,23 +1,28 @@
 """Source management: upload file, add URL, paste text, list, detail, delete, reprocess."""
 from __future__ import annotations
-import asyncio
 import logging
 import os
-import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 import database as db
-from config import settings
 from auth.dependencies import current_user_id
 from utils.serialization import now, oid, is_oid, serialize
 from jobs.processor import create_job, run_job_by_id
+from storage import s3_service
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 logger = logging.getLogger("ielts.sources")
 
 ALLOWED_FILE_KINDS = {"pdf", "docx", "txt", "csv", "json"}
+MIME_TYPES = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "txt": "text/plain",
+    "csv": "text/csv",
+    "json": "application/json",
+}
 
 
 class TextSource(BaseModel):
@@ -34,19 +39,23 @@ async def _run_safe(job_id: str) -> None:
     try:
         await run_job_by_id(job_id)
     except Exception:  # noqa: BLE001
-        logger.exception("In-process job %s failed", job_id)
+        logger.exception("Background job %s failed", job_id)
 
 
-async def _enqueue(user_id: str, source_id: str) -> str:
+async def _enqueue(background: BackgroundTasks, user_id: str, source_id: str) -> str:
+    """Create the job in Mongo and run it via a FastAPI BackgroundTask.
+
+    No standalone worker is needed: the task runs in-process after the response
+    is returned. Atomic job claiming means the optional worker (if ever run)
+    won't double-process.
+    """
     job_id = await create_job(user_id, source_id, "process")
-    # Process in-process so the app works even without the standalone worker.
-    # The worker also polls; atomic claiming prevents double processing.
-    asyncio.create_task(_run_safe(job_id))
+    background.add_task(_run_safe, job_id)
     return job_id
 
 
 @router.post("/text", status_code=201)
-async def add_text(body: TextSource, uid: str = Depends(current_user_id)):
+async def add_text(body: TextSource, background: BackgroundTasks, uid: str = Depends(current_user_id)):
     if len(body.text.strip()) < 10:
         raise HTTPException(400, "Text too short")
     doc = {
@@ -56,12 +65,12 @@ async def add_text(body: TextSource, uid: str = Depends(current_user_id)):
     }
     res = await db.sources().insert_one(doc)
     sid = str(res.inserted_id)
-    job_id = await _enqueue(uid, sid)
+    job_id = await _enqueue(background, uid, sid)
     return {"id": sid, "jobId": job_id, "status": "pending"}
 
 
 @router.post("/url", status_code=201)
-async def add_url(body: UrlSource, uid: str = Depends(current_user_id)):
+async def add_url(body: UrlSource, background: BackgroundTasks, uid: str = Depends(current_user_id)):
     if not body.url.startswith(("http://", "https://")):
         raise HTTPException(400, "URL must start with http:// or https://")
     doc = {
@@ -70,29 +79,50 @@ async def add_url(body: UrlSource, uid: str = Depends(current_user_id)):
     }
     res = await db.sources().insert_one(doc)
     sid = str(res.inserted_id)
-    job_id = await _enqueue(uid, sid)
+    job_id = await _enqueue(background, uid, sid)
     return {"id": sid, "jobId": job_id, "status": "pending"}
 
 
 @router.post("/upload", status_code=201)
-async def upload_file(file: UploadFile = File(...), title: str = Form(""), uid: str = Depends(current_user_id)):
+async def upload_file(
+    background: BackgroundTasks,
+    file: UploadFile = File(...),
+    title: str = Form(""),
+    uid: str = Depends(current_user_id),
+):
     ext = (os.path.splitext(file.filename or "")[1].lstrip(".") or "txt").lower()
     if ext not in ALLOWED_FILE_KINDS:
         raise HTTPException(400, f"Unsupported file type .{ext}")
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    stored_name = f"{uuid.uuid4().hex}.{ext}"
-    path = os.path.join(settings.upload_dir, stored_name)
     content = await file.read()
-    with open(path, "wb") as f:
-        f.write(content)
-    doc = {
-        "userId": uid, "type": "file", "title": title or file.filename or stored_name,
-        "filePath": path, "fileKind": ext, "originalName": file.filename,
-        "fileSize": len(content), "status": "pending", "createdAt": now(), "updatedAt": now(),
-    }
-    res = await db.sources().insert_one(doc)
+    mime = MIME_TYPES.get(ext, "application/octet-stream")
+
+    # 1) create the source doc first so we have a stable sourceId for the S3 key
+    res = await db.sources().insert_one({
+        "userId": uid, "type": ext, "kind": "file",
+        "title": title or file.filename or f"Upload.{ext}",
+        "originalFileName": file.filename, "fileKind": ext, "mimeType": mime,
+        "sizeBytes": len(content), "status": "pending",
+        "createdAt": now(), "updatedAt": now(),
+    })
     sid = str(res.inserted_id)
-    job_id = await _enqueue(uid, sid)
+
+    # 2) upload the original binary to S3 (or local fallback in dev)
+    key = s3_service.build_user_source_key(uid, sid, file.filename or f"file.{ext}")
+    try:
+        meta = s3_service.upload_file_bytes(key, content, mime)
+    except Exception as exc:  # noqa: BLE001
+        await db.sources().delete_one({"_id": oid(sid)})
+        logger.exception("S3 upload failed")
+        raise HTTPException(502, f"File storage failed: {exc}")
+
+    # 3) persist S3 metadata (NOT the binary) on the source
+    await db.sources().update_one({"_id": oid(sid)}, {"$set": {
+        "storage": meta["storage"], "s3Bucket": meta.get("bucket", ""),
+        "s3Key": meta["key"], "s3Url": meta.get("url", ""), "updatedAt": now(),
+    }})
+
+    # 4) enqueue extraction (processor pulls bytes from S3 → text in Mongo)
+    job_id = await _enqueue(background, uid, sid)
     return {"id": sid, "jobId": job_id, "status": "pending"}
 
 
@@ -116,6 +146,26 @@ async def get_source(source_id: str, uid: str = Depends(current_user_id)):
     return serialize(doc)
 
 
+@router.get("/{source_id}/download-url")
+async def download_url(source_id: str, uid: str = Depends(current_user_id)):
+    """Return a time-limited presigned URL for the original S3 file."""
+    if not is_oid(source_id):
+        raise HTTPException(404, "Not found")
+    doc = await db.sources().find_one({"_id": oid(source_id), "userId": uid})
+    if not doc:
+        raise HTTPException(404, "Not found")
+    key = doc.get("s3Key")
+    if not key:
+        raise HTTPException(404, "This source has no stored file")
+    url = s3_service.get_presigned_url(key, download_name=doc.get("originalFileName"))
+    if not url:
+        # local-fallback dev mode (or S3 disabled): expose stored public url if any
+        url = doc.get("s3Url") or None
+    if not url:
+        raise HTTPException(409, "File download is only available when S3 is configured")
+    return {"url": url, "expiresIn": 3600}
+
+
 @router.delete("/{source_id}")
 async def delete_source(source_id: str, uid: str = Depends(current_user_id)):
     if not is_oid(source_id):
@@ -123,12 +173,12 @@ async def delete_source(source_id: str, uid: str = Depends(current_user_id)):
     doc = await db.sources().find_one({"_id": oid(source_id), "userId": uid})
     if not doc:
         raise HTTPException(404, "Not found")
-    if doc.get("filePath") and os.path.exists(doc["filePath"]):
-        try:
-            os.remove(doc["filePath"])
-        except OSError:
-            pass
+    # remove the original binary from S3 (or local fallback)
+    if doc.get("s3Key"):
+        s3_service.delete_object(doc["s3Key"])
+    # remove the source + its chunks from Mongo
     await db.sources().delete_one({"_id": oid(source_id)})
+    await db.source_chunks().delete_many({"sourceId": source_id})
     # detach from extracted items (keep items, just remove source ref)
     for c in (db.vocab(), db.phrases(), db.patterns()):
         await c.update_many({"userId": uid}, {"$pull": {"sourceIds": source_id}})
@@ -136,12 +186,12 @@ async def delete_source(source_id: str, uid: str = Depends(current_user_id)):
 
 
 @router.post("/{source_id}/reprocess")
-async def reprocess(source_id: str, uid: str = Depends(current_user_id)):
+async def reprocess(source_id: str, background: BackgroundTasks, uid: str = Depends(current_user_id)):
     if not is_oid(source_id):
         raise HTTPException(404, "Not found")
     doc = await db.sources().find_one({"_id": oid(source_id), "userId": uid})
     if not doc:
         raise HTTPException(404, "Not found")
     await db.sources().update_one({"_id": oid(source_id)}, {"$set": {"status": "pending"}})
-    job_id = await _enqueue(uid, source_id)
+    job_id = await _enqueue(background, uid, source_id)
     return {"jobId": job_id, "status": "pending"}

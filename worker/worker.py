@@ -1,13 +1,17 @@
-"""Standalone background worker.
+"""OPTIONAL standalone background worker — NOT required for normal operation.
 
-Polls MongoDB for pending jobs and processes them using the same pipeline as
-the API. Run it as a separate process:
+By default the API processes every source in-process via FastAPI
+BackgroundTasks, so you do NOT need to run this worker and you should NOT
+deploy it as a separate service for a personal/local setup.
+
+This file is kept only for future heavy/batch processing. If you ever want a
+separate process to drain the job queue, run it manually:
 
     cd api && source .venv/bin/activate
     cd ../worker && python worker.py
 
-It shares the api/ code (added to sys.path below), so run it from the repo
-with the api virtualenv activated.
+It shares the api/ code (added to sys.path below) and claims jobs atomically,
+so it is safe to run alongside the API without double-processing.
 """
 from __future__ import annotations
 import asyncio

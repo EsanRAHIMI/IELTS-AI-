@@ -24,8 +24,16 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1"
 
-    # Storage
-    upload_dir: str = "./storage/uploads"
+    # Temp dir for transient parsing only (never permanent storage).
+    upload_dir: str = "./storage/tmp"
+
+    # Amazon S3 (primary store for original/binary files).
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_region: str = "eu-central-1"
+    aws_s3_bucket: str = ""
+    aws_s3_public_base_url: str = ""  # e.g. CloudFront URL; optional
+    s3_presign_expiry: int = 3600  # seconds
 
     # CORS
     cors_origins: str = "http://localhost:3000"
@@ -33,6 +41,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def s3_enabled(self) -> bool:
+        return bool(self.aws_access_key_id and self.aws_secret_access_key and self.aws_s3_bucket)
 
 
 @lru_cache

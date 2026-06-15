@@ -1,8 +1,12 @@
-"""Job constants."""
+"""Job constants. Lifecycle: pending -> processing -> done | failed."""
 
 JOB_PENDING = "pending"
-JOB_RUNNING = "running"
+JOB_PROCESSING = "processing"
 JOB_DONE = "done"
-JOB_ERROR = "error"
+JOB_FAILED = "failed"
 
-JOB_STATUSES = {JOB_PENDING, JOB_RUNNING, JOB_DONE, JOB_ERROR}
+# Backwards-compatible aliases (older code/data may reference these names).
+JOB_RUNNING = JOB_PROCESSING
+JOB_ERROR = JOB_FAILED
+
+JOB_STATUSES = {JOB_PENDING, JOB_PROCESSING, JOB_DONE, JOB_FAILED}

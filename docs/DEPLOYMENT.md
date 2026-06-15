@@ -20,23 +20,22 @@ uploaded files.
 
 ## 2. Recommended Dokploy service mapping
 
-Create **three applications** from the same repository, each with a different
+Create **two applications** from the same repository, each with a different
 *root directory*:
 
 | Dokploy app | Root dir | Build command | Start command | Port |
 |---|---|---|---|---|
-| `ielts-api` | `api` | `pip install -r requirements.txt && python -m spacy download en_core_web_sm` | `uvicorn main:app --host 0.0.0.0 --port 8010` | 8010 |
-| `ielts-worker` | `api` | `pip install -r requirements.txt` | `python ../worker/worker.py` | — |
+| `ielts-api` | `api` | `pip install -r requirements.txt` | `python -m uvicorn main:app --host 0.0.0.0 --port 8010` | 8010 |
 | `ielts-web` | `web` | `npm install && npm run build` | `npm run start` | 3000 |
 
-> The worker shares the `api/` code, so point its root dir at `api` and start
-> `../worker/worker.py` (it adds `api/` to `sys.path`). Alternatively keep root
-> at the repo and run `python worker/worker.py` after installing
-> `api/requirements.txt`.
+> **No worker service.** Source processing runs inside the API via FastAPI
+> BackgroundTasks, so only `api` and `web` are deployed. The `worker/` folder is
+> optional and reserved for possible future heavy/batch processing — do not
+> deploy it.
 
 ## 3. Production environment variables
 
-**API & worker** (set in Dokploy → Environment):
+**API** (set in Dokploy → Environment):
 
 ```
 MONGODB_URI=<atlas-uri>
@@ -44,7 +43,13 @@ MONGODB_DB=ielts_ai_mastery
 JWT_SECRET=<long-random-string>
 AI_PROVIDER=openai
 OPENAI_API_KEY=<key>          # or ANTHROPIC_API_KEY / OLLAMA_*
-UPLOAD_DIR=./storage/uploads
+# Amazon S3 (original/binary file storage)
+AWS_ACCESS_KEY_ID=<key>
+AWS_SECRET_ACCESS_KEY=<secret>
+AWS_REGION=eu-central-1
+AWS_S3_BUCKET=<bucket>
+AWS_S3_PUBLIC_BASE_URL=<optional-cloudfront-url>
+UPLOAD_DIR=/tmp/ielts          # transient parsing only; NOT persistent
 CORS_ORIGINS=https://your-web-domain
 ```
 
@@ -54,13 +59,24 @@ CORS_ORIGINS=https://your-web-domain
 NEXT_PUBLIC_API_BASE_URL=https://your-api-domain
 ```
 
-## 4. Notes
+## 4. Storage notes (important)
+
+- **No persistent local volume is required.** Original files are stored in
+  **Amazon S3**; all structured text/data lives in **MongoDB Atlas**. `UPLOAD_DIR`
+  is used only for transient, in-process parsing and can point at `/tmp`.
+- Configure the `AWS_*` vars on `ielts-api` (it uploads originals to S3 and
+  pulls bytes back when extracting — all within the BackgroundTask).
+- Ensure the S3 bucket's IAM user has `s3:PutObject`, `s3:GetObject` and
+  `s3:DeleteObject` on the bucket. Optionally front it with CloudFront and set
+  `AWS_S3_PUBLIC_BASE_URL`.
+- If you previously ran with local uploads, run the one-off migration:
+  `python scripts/migrate_local_storage_to_s3.py --delete-local`.
+
+## 5. Notes
 
 - Set `CORS_ORIGINS` on the API to your deployed web domain.
 - The API serves Swagger at `/docs`; lock it down or disable in production if
   desired.
-- For persistent uploads in production, mount a volume at `api/storage/uploads`
-  (or switch `UPLOAD_DIR` to a mounted path).
 - Atlas **Network Access** must allow your Dokploy host's IP (or `0.0.0.0/0`).
 - Run the seed script once against production:
   `python scripts/seed_ielts_data.py --email you@example.com`.
