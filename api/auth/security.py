@@ -2,21 +2,29 @@
 from datetime import timedelta
 from typing import Any
 
+import bcrypt
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 
 from config import settings
 from utils.serialization import now
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt only considers the first 72 bytes of the password. We call bcrypt
+# directly (instead of passlib, which is unmaintained and breaks with
+# bcrypt >= 5 on newer Python) and truncate defensively to 72 bytes.
+_MAX_BCRYPT_BYTES = 72
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    pw = password.encode("utf-8")[:_MAX_BCRYPT_BYTES]
+    return bcrypt.hashpw(pw, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        pw = plain.encode("utf-8")[:_MAX_BCRYPT_BYTES]
+        return bcrypt.checkpw(pw, hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def create_access_token(subject: str, extra: dict[str, Any] | None = None) -> str:

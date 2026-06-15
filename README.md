@@ -97,8 +97,13 @@ tokenizer/lemmatizer, and CSV parsing uses the standard library.
 ```bash
 cd api
 source .venv/bin/activate
-uvicorn main:app --reload --port 8010
+python -m uvicorn main:app --reload --port 8010
 ```
+
+> Use `python -m uvicorn` (not just `uvicorn`). If you have a Homebrew-installed
+> `uvicorn` on your PATH, the bare command can run under the wrong Python and
+> fail with `ModuleNotFoundError: No module named 'motor'`. Running it as a
+> module always uses the venv's interpreter and packages.
 
 API docs: http://localhost:8010/docs · Health: http://localhost:8010/health
 

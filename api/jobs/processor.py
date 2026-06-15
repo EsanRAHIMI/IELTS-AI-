@@ -16,7 +16,7 @@ import database as db
 from utils.serialization import now, oid
 from ingestion.parsers import parse_file, parse_url
 from extraction.extractor import extract
-from jobs.schemas import JOB_RUNNING, JOB_DONE, JOB_ERROR
+from jobs.schemas import JOB_PENDING, JOB_RUNNING, JOB_DONE, JOB_ERROR
 from ai import service as ai
 
 logger = logging.getLogger("ielts.jobs")
