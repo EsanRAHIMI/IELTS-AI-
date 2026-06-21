@@ -39,7 +39,7 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
+    <div className="grid min-h-app lg:grid-cols-2">
       {/* Left brand panel */}
       <div className="relative hidden flex-col justify-between bg-primary p-12 text-primary-foreground lg:flex">
         <div className="flex items-center gap-2 text-lg font-semibold">
@@ -69,7 +69,7 @@ export default function LandingPage() {
       </div>
 
       {/* Right auth form */}
-      <div className="flex items-center justify-center p-6">
+      <div className="flex items-center justify-center p-6 pt-safe px-safe pb-safe-or-4">
         <Card className="w-full max-w-md p-8">
           <div className="mb-6 text-center lg:hidden">
             <div className="mb-2 flex items-center justify-center gap-2 text-lg font-semibold">

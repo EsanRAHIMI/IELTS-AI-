@@ -20,11 +20,13 @@ export function PwaInstallBanner() {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-50 border-t bg-card/95 p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md pb-safe md:hidden"
+      className="fixed inset-x-0 z-30 border-t bg-card/95 px-safe shadow-[0_-8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md lg:hidden"
+      style={{ bottom: "var(--mobile-tab-bar-offset)" }}
       role="region"
       aria-label="Install app"
     >
-      <div className="mx-auto flex max-w-lg items-start gap-3">
+      <div className="mx-auto max-w-lg p-4 pb-safe-or-4">
+        <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
           <Smartphone className="h-5 w-5" />
         </div>
@@ -61,6 +63,7 @@ export function PwaInstallBanner() {
         <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={dismiss} aria-label="Dismiss">
           <X className="h-4 w-4" />
         </Button>
+        </div>
       </div>
     </div>
   );

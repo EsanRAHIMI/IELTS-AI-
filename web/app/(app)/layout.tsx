@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { Sheet } from "@/components/ui/sheet";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { PwaInstallProvider, usePwaInstallContext } from "@/components/pwa-install-provider";
+import { MobileTabBar } from "@/components/mobile-tab-bar";
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -65,19 +67,26 @@ function AppShell({
   const { canShow: showPwaBanner } = usePwaInstallContext();
 
   return (
-    <div className="flex min-h-[100dvh] overflow-hidden">
+    <div className="flex min-h-app overflow-hidden">
       <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
         <Sidebar />
       </aside>
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen} side="left" className="max-w-[16rem] p-0">
         <Sidebar onNavigate={() => setMobileOpen(false)} />
       </Sheet>
-      <div className="flex min-h-[100dvh] flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-app flex-1 flex-col overflow-hidden">
         <Topbar onMenu={() => setMobileOpen(true)} title={title} />
-        <main className={`flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 ${showPwaBanner ? "pb-36 md:pb-8" : "pb-safe"}`}>
+        <main
+          className={cn(
+            "flex-1 overflow-y-auto px-4 py-4 px-safe md:p-6 lg:p-8",
+            "pb-mobile-nav lg:pb-8",
+            showPwaBanner && "max-lg:pb-[calc(var(--mobile-tab-bar-offset)+7.5rem)]",
+          )}
+        >
           {children}
         </main>
         <PwaInstallBanner />
+        <MobileTabBar />
       </div>
     </div>
   );

@@ -23,13 +23,14 @@ export function Sheet({
       <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={() => onOpenChange(false)} />
       <div
         className={cn(
-          "absolute top-0 h-full w-full max-w-md overflow-y-auto border-l bg-card p-6 shadow-xl animate-fade-in",
-          side === "right" ? "right-0" : "left-0",
+          "absolute top-0 flex h-full w-full max-w-md flex-col overflow-y-auto border-l bg-card shadow-xl animate-fade-in pt-safe pb-safe px-safe",
+          side === "right" ? "right-0 border-l" : "left-0 border-r",
           className,
         )}
       >
         <button
-          className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+          className="absolute right-4 z-10 text-muted-foreground hover:text-foreground"
+          style={{ top: "calc(1rem + var(--safe-top))" }}
           onClick={() => onOpenChange(false)}
           aria-label="Close"
         >
