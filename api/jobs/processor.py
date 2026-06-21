@@ -232,6 +232,7 @@ async def process_job(job: dict) -> None:
         await _log(job_id, f"Phrases extracted: {len(result.phrases)}")
         await _log(job_id, f"Patterns extracted: {len(result.patterns)}")
 
+        await _log(job_id, "Saving extracted items to database…")
         n_words = await _merge_words(user_id, source_id, result.words)
         n_phrases = await _merge_phrases(user_id, source_id, result.phrases)
         n_patterns = await _merge_patterns(user_id, source_id, result.patterns)
@@ -410,3 +411,36 @@ async def create_job(user_id: str, source_id: str, kind: str = "process") -> str
     }
     res = await db.jobs().insert_one(doc)
     return str(res.inserted_id)
+
+
+async def recover_orphaned_jobs() -> int:
+    """Re-queue jobs that were pending/processing when the API stopped.
+
+    Processing runs in the API process (not in the browser). After a crash or
+    ``uvicorn --reload``, in-flight jobs must be picked up again on startup.
+    """
+    import asyncio
+
+    resumed = 0
+    cur = db.jobs().find({"status": {"$in": [JOB_PENDING, JOB_PROCESSING]}})
+    async for job in cur:
+        jid = str(job["_id"])
+        sid = job.get("sourceId")
+        if job["status"] == JOB_PROCESSING:
+            await db.jobs().update_one(
+                {"_id": job["_id"]},
+                {
+                    "$set": {"status": JOB_PENDING, "updatedAt": now()},
+                    "$push": {"logs": {"t": now(), "msg": "Resumed after server restart"}},
+                },
+            )
+            if sid:
+                await db.sources().update_one(
+                    {"_id": oid(sid), "status": "processing"},
+                    {"$set": {"status": "pending", "updatedAt": now()}},
+                )
+        asyncio.create_task(run_job_by_id(jid))
+        resumed += 1
+    if resumed:
+        logger.info("Recovered %d orphaned job(s)", resumed)
+    return resumed

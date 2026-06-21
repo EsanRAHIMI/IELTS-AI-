@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
 import { UploadCloud, Link2, FileText, RefreshCw, Trash2, Loader2, CheckCircle2, AlertCircle, AlertTriangle, ScanLine, Layers, Download, Eye } from "lucide-react";
 import { api, BASE_URL, getToken } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/toast";
 export default function ImportPage() {
   const { toast } = useToast();
   const { data, loading, reload } = useApiData<{ items: Source[] }>("/sources");
+  const { data: activeJobs, reload: reloadJobs } = useApiData<{ items: Job[] }>("/jobs/active");
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const [textTitle, setTextTitle] = useState("");
@@ -35,13 +36,24 @@ export default function ImportPage() {
     }
   }
 
-  // Poll while any source is processing.
+  // Poll while any source is still running (server-side — survives browser refresh).
   useEffect(() => {
     const processing = (data?.items || []).some((s) => ["pending", "processing"].includes(s.status));
     if (!processing) return;
-    const t = setInterval(reload, 2500);
+    const t = setInterval(() => {
+      reload();
+      reloadJobs();
+    }, 2500);
     return () => clearInterval(t);
-  }, [data, reload]);
+  }, [data, reload, reloadJobs]);
+
+  const jobBySource = useMemo(() => {
+    const map = new Map<string, Job>();
+    for (const j of activeJobs?.items || []) {
+      if (j.sourceId) map.set(j.sourceId, j);
+    }
+    return map;
+  }, [activeJobs]);
 
   async function submitText() {
     if (text.trim().length < 10) return toast({ title: "Add more text", variant: "error" });
@@ -80,8 +92,13 @@ export default function ImportPage() {
         body: fd,
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Upload failed");
-      toast({ title: "Uploaded & processing", variant: "success" });
+      toast({
+        title: "Uploaded — processing on server",
+        description: "You can close this tab; check Import later for status.",
+        variant: "success",
+      });
       reload();
+      reloadJobs();
     } catch (e: any) {
       toast({ title: "Failed", description: e.message, variant: "error" });
     } finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
@@ -159,13 +176,17 @@ export default function ImportPage() {
         <CardHeader>
           <CardTitle>Your sources</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Preview extracted text, download the original file, re-run extraction, or remove a source.
+            Processing runs on the server — safe to refresh or close the browser after upload. Return here anytime to
+            check status.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
           {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
           {!loading && !data?.items.length && <p className="text-sm text-muted-foreground">No sources yet.</p>}
-          {data?.items.map((s) => (
+          {data?.items.map((s) => {
+            const job = jobBySource.get(s.id);
+            const lastLog = job?.lastLog || job?.logs?.[job.logs.length - 1]?.msg;
+            return (
             <div key={s.id} className="rounded-lg border p-3">
               <div className="flex items-start gap-3">
                 <FileText className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
@@ -181,6 +202,9 @@ export default function ImportPage() {
                     {(s.originalFileName || s.type).toString()} · {s.type.toUpperCase()} ·{" "}
                     {s.stats?.wordsExtracted ?? 0} words · {s.stats?.phrasesExtracted ?? 0} phrases
                   </p>
+                  {["pending", "processing"].includes(s.status) && lastLog && (
+                    <p className="mt-1 truncate text-xs text-accent">{lastLog}</p>
+                  )}
                 </div>
                 <StatusBadge status={s.status} />
               </div>
@@ -209,7 +233,7 @@ export default function ImportPage() {
                 </Button>
               </div>
             </div>
-          ))}
+          );})}
         </CardContent>
       </Card>
 
@@ -243,9 +267,12 @@ function JobLogsDialog({ sourceId, onClose }: { sourceId: string | null; onClose
     if (!sourceId) return;
     let active = true;
     async function load() {
-      const res = await api<{ items: Job[] }>("/jobs", { query: { limit: 25 } });
-      const match = res.items.find((j: any) => (j as any).sourceId === sourceId) || res.items[0];
-      if (active) setJob(match || null);
+      try {
+        const match = await api<Job>(`/jobs/by-source/${sourceId}`);
+        if (active) setJob(match);
+      } catch {
+        if (active) setJob(null);
+      }
     }
     load();
     const t = setInterval(load, 2500);

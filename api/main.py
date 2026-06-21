@@ -1,5 +1,6 @@
 """IELTS AI Mastery Engine - FastAPI application entrypoint."""
 from __future__ import annotations
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -34,6 +35,9 @@ async def lifespan(app: FastAPI):
     logger.info("AI provider '%s' configured: %s", settings.ai_provider, ai.ai_available())
     if API_PREFIX:
         logger.info("API routes mounted under prefix '%s'", API_PREFIX)
+    from jobs.processor import recover_orphaned_jobs
+
+    asyncio.create_task(recover_orphaned_jobs())
     yield
     logger.info("Shutting down")
 

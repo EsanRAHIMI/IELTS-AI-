@@ -108,9 +108,11 @@ export interface SourceDeleteImpact {
 
 export interface Job {
   id: string;
+  sourceId?: string;
   status: string;
   kind: string;
   logs?: { t: string; msg: string }[];
+  lastLog?: string | null;
   result?: { words: number; phrases: number; patterns: number };
   error?: string;
   createdAt: string;
