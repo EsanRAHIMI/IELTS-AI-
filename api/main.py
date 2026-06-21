@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
@@ -19,6 +19,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ielts")
 
+API_PREFIX = settings.api_prefix
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,11 +32,20 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("MongoDB not reachable at startup - check MONGODB_URI")
     logger.info("AI provider '%s' configured: %s", settings.ai_provider, ai.ai_available())
+    if API_PREFIX:
+        logger.info("API routes mounted under prefix '%s'", API_PREFIX)
     yield
     logger.info("Shutting down")
 
 
-app = FastAPI(title="IELTS AI Mastery Engine", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="IELTS AI Mastery Engine",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url=f"{API_PREFIX}/docs" if API_PREFIX else "/docs",
+    openapi_url=f"{API_PREFIX}/openapi.json" if API_PREFIX else "/openapi.json",
+    redoc_url=f"{API_PREFIX}/redoc" if API_PREFIX else "/redoc",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -90,15 +101,17 @@ from content.routes import router as content_router  # noqa: E402
 from study.routes import router as study_router  # noqa: E402
 from progress.routes import router as progress_router  # noqa: E402
 
-app.include_router(auth_router)
-app.include_router(sources_router)
-app.include_router(jobs_router)
-app.include_router(content_router)
-app.include_router(study_router)
-app.include_router(progress_router)
+api_router = APIRouter(prefix=API_PREFIX)
+
+api_router.include_router(auth_router)
+api_router.include_router(sources_router)
+api_router.include_router(jobs_router)
+api_router.include_router(content_router)
+api_router.include_router(study_router)
+api_router.include_router(progress_router)
 
 
-@app.get("/health", tags=["meta"])
+@api_router.get("/health", tags=["meta"])
 async def health():
     return {
         "status": "ok",
@@ -108,6 +121,10 @@ async def health():
     }
 
 
-@app.get("/", tags=["meta"])
+@api_router.get("/", tags=["meta"])
 async def root():
-    return {"name": "IELTS AI Mastery Engine API", "version": "1.0.0", "docs": "/docs"}
+    docs_path = f"{API_PREFIX}/docs" if API_PREFIX else "/docs"
+    return {"name": "IELTS AI Mastery Engine API", "version": "1.0.0", "docs": docs_path}
+
+
+app.include_router(api_router)

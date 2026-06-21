@@ -101,6 +101,11 @@ export interface SourceStats {
   [key: string]: number | string | string[] | undefined;
 }
 
+export interface SourceDeleteImpact {
+  linked: { words: number; phrases: number; patterns: number };
+  exclusive: { words: number; phrases: number; patterns: number };
+}
+
 export interface Job {
   id: string;
   status: string;

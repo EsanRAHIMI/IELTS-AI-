@@ -54,12 +54,15 @@ AWS_S3_BUCKET=<bucket>
 AWS_S3_PUBLIC_BASE_URL=<optional-cloudfront-url>
 UPLOAD_DIR=/tmp/ielts          # transient parsing only; NOT persistent
 CORS_ORIGINS=https://your-web-domain
+API_ROOT_PREFIX=/api
 PORT=8010
 ```
 
 > No comments (`# ...`) in Dokploy env — paste only `KEY=value` lines.  
 > Set `AI_PROVIDER` once (duplicate keys leave only the last value).  
-> No trailing slash on `CORS_ORIGINS` (use `https://ielts.najahai.com`, not `...com/`).
+> No trailing slash on `CORS_ORIGINS` (use `https://ielts.najahai.com`, not `...com/`).  
+> **`API_ROOT_PREFIX=/api`** is required when Traefik forwards `/api/*` to the container
+> **without** stripping the prefix (the usual Dokploy path setup).
 
 **Web**:
 
@@ -74,11 +77,11 @@ When web and API share one host (e.g. `ielts.najahai.com`), add **two domains** 
 | Service | Host | Path | Strip path | Container port | HTTPS |
 |---|---|---|---|---|---|
 | `ielts-web` | `ielts.najahai.com` | `/` (empty) | off | **3000** | on |
-| `ielts-api` | `ielts.najahai.com` | `/api` | **on** | **8010** | on |
+| `ielts-api` | `ielts.najahai.com` | `/api` | off | **8010** | on |
 
-- **Strip path** must be **on** for the API so `/api/auth/login` reaches the container as `/auth/login`.
+- Set **`API_ROOT_PREFIX=/api`** on the API service so routes match `/api/auth/login`, etc.
 - **Container port** must match what uvicorn listens on (8010, or `$PORT` if set in env).
-- After changing domains, check Traefik logs in Dokploy if routes still fail.
+- Strip path is **not** required when `API_ROOT_PREFIX` is set.
 
 Quick check after deploy:
 
@@ -88,6 +91,11 @@ curl -s https://ielts.najahai.com/api/health
 ```
 
 A **502 Bad Gateway** on `/api/*` almost always means the API container is down or the domain’s **container port** is wrong — open the API app → **Logs** in Dokploy first.
+
+### Troubleshooting: 404 on login, 405 on `/api/health`
+
+If API logs show `POST /api/auth/login` → 404, the container receives the `/api` prefix.
+Set **`API_ROOT_PREFIX=/api`** in the API environment and redeploy.
 
 ## 4. Storage notes (important)
 

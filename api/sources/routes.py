@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form, Query
 from pydantic import BaseModel
 
 import database as db
@@ -134,13 +134,77 @@ async def list_sources(uid: str = Depends(current_user_id), page: int = 1, limit
     return {"items": items, "total": total, "page": page}
 
 
-@router.get("/{source_id}")
-async def get_source(source_id: str, uid: str = Depends(current_user_id)):
+async def _extracted_counts(uid: str, source_id: str) -> dict[str, int]:
+    """How many vocab/phrases/patterns are linked to this source."""
+    counts: dict[str, int] = {}
+    for key, col in (("words", db.vocab()), ("phrases", db.phrases()), ("patterns", db.patterns())):
+        counts[key] = await col.count_documents({"userId": uid, "sourceIds": source_id})
+    counts["exclusiveWords"] = await db.vocab().count_documents(
+        {"userId": uid, "sourceIds": [source_id]}
+    )
+    counts["exclusivePhrases"] = await db.phrases().count_documents(
+        {"userId": uid, "sourceIds": [source_id]}
+    )
+    counts["exclusivePatterns"] = await db.patterns().count_documents(
+        {"userId": uid, "sourceIds": [source_id]}
+    )
+    return counts
+
+
+_CARD_TYPE = {"words": "word", "phrases": "phrase", "patterns": "sentence_pattern"}
+
+
+async def _detach_or_delete_extracted(uid: str, source_id: str, *, keep_data: bool) -> dict[str, int]:
+    """Unlink or delete vocabulary/phrases/patterns tied to a source."""
+    removed = {"words": 0, "phrases": 0, "patterns": 0}
+    for key, col in (("words", db.vocab()), ("phrases", db.phrases()), ("patterns", db.patterns())):
+        card_type = _CARD_TYPE[key]
+        async for doc in col.find({"userId": uid, "sourceIds": source_id}):
+            sids = doc.get("sourceIds") or []
+            ref_id = str(doc["_id"])
+            if keep_data or len(sids) > 1:
+                await col.update_one(
+                    {"_id": doc["_id"]},
+                    {"$pull": {"sourceIds": source_id}, "$set": {"updatedAt": now()}},
+                )
+            else:
+                await col.delete_one({"_id": doc["_id"]})
+                await db.cards().delete_many({"userId": uid, "type": card_type, "refId": ref_id})
+                removed[key] += 1
+    return removed
+
+
+async def _get_owned_source(source_id: str, uid: str) -> dict:
     if not is_oid(source_id):
         raise HTTPException(404, "Not found")
     doc = await db.sources().find_one({"_id": oid(source_id), "userId": uid})
     if not doc:
         raise HTTPException(404, "Not found")
+    return doc
+
+
+@router.get("/{source_id}/delete-impact")
+async def delete_impact(source_id: str, uid: str = Depends(current_user_id)):
+    """Preview how many extracted items are linked before deleting a source."""
+    await _get_owned_source(source_id, uid)
+    counts = await _extracted_counts(uid, source_id)
+    return {
+        "linked": {
+            "words": counts["words"],
+            "phrases": counts["phrases"],
+            "patterns": counts["patterns"],
+        },
+        "exclusive": {
+            "words": counts["exclusiveWords"],
+            "phrases": counts["exclusivePhrases"],
+            "patterns": counts["exclusivePatterns"],
+        },
+    }
+
+
+@router.get("/{source_id}")
+async def get_source(source_id: str, uid: str = Depends(current_user_id)):
+    doc = await _get_owned_source(source_id, uid)
     doc["rawText"] = (doc.get("rawText") or "")[:5000]
     return serialize(doc)
 
@@ -166,37 +230,43 @@ async def download_url(source_id: str, uid: str = Depends(current_user_id)):
 
 
 @router.delete("/{source_id}")
-async def delete_source(source_id: str, uid: str = Depends(current_user_id)):
-    if not is_oid(source_id):
-        raise HTTPException(404, "Not found")
-    doc = await db.sources().find_one({"_id": oid(source_id), "userId": uid})
-    if not doc:
-        raise HTTPException(404, "Not found")
-    # remove the original binary from S3 (or local fallback)
+async def delete_source(
+    source_id: str,
+    uid: str = Depends(current_user_id),
+    keep_extracted_data: bool = Query(
+        True,
+        description="Keep vocabulary/phrases/patterns; only unlink this source",
+    ),
+):
+    doc = await _get_owned_source(source_id, uid)
     if doc.get("s3Key"):
         s3_service.delete_object(doc["s3Key"])
-    # remove the source + its chunks/pages from Mongo
     await db.sources().delete_one({"_id": oid(source_id)})
     await db.source_chunks().delete_many({"sourceId": source_id})
     await db.source_pages().delete_many({"sourceId": source_id})
-    # detach from extracted items (keep items, just remove source ref)
-    for c in (db.vocab(), db.phrases(), db.patterns()):
-        await c.update_many({"userId": uid}, {"$pull": {"sourceIds": source_id}})
-    return {"ok": True}
+    removed = await _detach_or_delete_extracted(uid, source_id, keep_data=keep_extracted_data)
+    return {"ok": True, "keepExtractedData": keep_extracted_data, "removed": removed}
 
 
 @router.post("/{source_id}/reprocess")
-async def reprocess(source_id: str, background: BackgroundTasks, uid: str = Depends(current_user_id)):
-    if not is_oid(source_id):
-        raise HTTPException(404, "Not found")
-    doc = await db.sources().find_one({"_id": oid(source_id), "userId": uid})
-    if not doc:
-        raise HTTPException(404, "Not found")
+async def reprocess(
+    source_id: str,
+    background: BackgroundTasks,
+    uid: str = Depends(current_user_id),
+    reset_extracted_data: bool = Query(
+        False,
+        description="Also remove vocabulary/phrases/patterns linked only to this source",
+    ),
+):
+    await _get_owned_source(source_id, uid)
     # Wipe any data produced by a previous run so reprocessing starts clean.
     await db.source_chunks().delete_many({"sourceId": source_id})
     await db.source_pages().delete_many({"sourceId": source_id})
-    for c in (db.vocab(), db.phrases(), db.patterns()):
-        await c.update_many({"userId": uid}, {"$pull": {"sourceIds": source_id}})
+    if reset_extracted_data:
+        await _detach_or_delete_extracted(uid, source_id, keep_data=False)
+    else:
+        for c in (db.vocab(), db.phrases(), db.patterns()):
+            await c.update_many({"userId": uid}, {"$pull": {"sourceIds": source_id}})
     await db.sources().update_one(
         {"_id": oid(source_id)},
         {"$set": {"status": "pending", "stats": {}, "rawText": "", "cleanedText": "",

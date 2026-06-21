@@ -58,8 +58,19 @@ class Settings(BaseSettings):
     aws_s3_public_base_url: str = ""  # e.g. CloudFront URL; optional
     s3_presign_expiry: int = 3600  # seconds
 
+    # URL prefix when the reverse proxy forwards /api/* without stripping (Dokploy).
+    # Local dev: leave empty. Production: API_ROOT_PREFIX=/api
+    api_root_prefix: str = ""
+
     # CORS
     cors_origins: str = "http://localhost:3000"
+
+    @property
+    def api_prefix(self) -> str:
+        p = self.api_root_prefix.strip().rstrip("/")
+        if not p:
+            return ""
+        return p if p.startswith("/") else f"/{p}"
 
     @property
     def cors_origins_list(self) -> list[str]:
