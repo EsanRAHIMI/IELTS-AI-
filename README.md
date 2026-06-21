@@ -134,6 +134,10 @@ source .venv/bin/activate
 python -m uvicorn main:app --reload --port 8010
 ```
 
+> For large PDFs / OCR jobs, prefer **without** `--reload` — reload waits for
+> background jobs and can feel unstoppable. Stop a job from **Import → Stop**, or
+> force-kill the server: `lsof -ti :8010 | xargs kill -9`
+
 > Use `python -m uvicorn` (not just `uvicorn`). If you have a Homebrew-installed
 > `uvicorn` on your PATH, the bare command can run under the wrong Python and
 > fail with `ModuleNotFoundError: No module named 'motor'`. Running it as a

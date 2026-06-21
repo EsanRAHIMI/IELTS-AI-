@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
-import { UploadCloud, Link2, FileText, RefreshCw, Trash2, Loader2, CheckCircle2, AlertCircle, AlertTriangle, ScanLine, Layers, Download, Eye } from "lucide-react";
+import { UploadCloud, Link2, FileText, RefreshCw, Trash2, Loader2, CheckCircle2, AlertCircle, AlertTriangle, ScanLine, Layers, Download, Eye, Square } from "lucide-react";
 import { api, BASE_URL, getToken } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import type { Source, Job, SourceDeleteImpact } from "@/types";
@@ -111,6 +111,18 @@ export default function ImportPage() {
     });
     toast({ title: resetExtractedData ? "Reprocessing (old data cleared)" : "Reprocessing", variant: "success" });
     reload();
+    reloadJobs();
+  }
+
+  async function cancelProcessing(id: string) {
+    try {
+      await api(`/jobs/by-source/${id}/cancel`, { method: "POST" });
+      toast({ title: "Processing stopped", variant: "success" });
+      reload();
+      reloadJobs();
+    } catch (e: any) {
+      toast({ title: "Could not stop", description: e.message, variant: "error" });
+    }
   }
 
   return (
@@ -223,6 +235,16 @@ export default function ImportPage() {
                 <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setReprocessId(s.id)}>
                   <RefreshCw className="h-3.5 w-3.5" /> Reprocess
                 </Button>
+                {["pending", "processing"].includes(s.status) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1 text-destructive hover:text-destructive"
+                    onClick={() => cancelProcessing(s.id)}
+                  >
+                    <Square className="h-3.5 w-3.5" /> Stop
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"

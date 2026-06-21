@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from pydantic import BaseModel
 
 import database as db
 from auth.dependencies import current_user_id
 from utils.serialization import now, oid, is_oid, serialize
-from jobs.processor import create_job, run_job_by_id
+from jobs.processor import create_job, schedule_job
 from storage import s3_service
 
 router = APIRouter(prefix="/sources", tags=["sources"])
@@ -35,26 +35,15 @@ class UrlSource(BaseModel):
     title: str | None = None
 
 
-async def _run_safe(job_id: str) -> None:
-    try:
-        await run_job_by_id(job_id)
-    except Exception:  # noqa: BLE001
-        logger.exception("Background job %s failed", job_id)
-
-
-async def _enqueue(background: BackgroundTasks, user_id: str, source_id: str) -> str:
-    """Create the job in Mongo and run it via a FastAPI BackgroundTask.
-
-    The task runs in-process right after the response is returned, so the UI
-    never blocks on heavy extraction.
-    """
+async def _enqueue(user_id: str, source_id: str) -> str:
+    """Create the job in Mongo and schedule it on the server (not in the browser)."""
     job_id = await create_job(user_id, source_id, "process")
-    background.add_task(_run_safe, job_id)
+    schedule_job(job_id)
     return job_id
 
 
 @router.post("/text", status_code=201)
-async def add_text(body: TextSource, background: BackgroundTasks, uid: str = Depends(current_user_id)):
+async def add_text(body: TextSource, uid: str = Depends(current_user_id)):
     if len(body.text.strip()) < 10:
         raise HTTPException(400, "Text too short")
     doc = {
@@ -64,12 +53,12 @@ async def add_text(body: TextSource, background: BackgroundTasks, uid: str = Dep
     }
     res = await db.sources().insert_one(doc)
     sid = str(res.inserted_id)
-    job_id = await _enqueue(background, uid, sid)
+    job_id = await _enqueue(uid, sid)
     return {"id": sid, "jobId": job_id, "status": "pending"}
 
 
 @router.post("/url", status_code=201)
-async def add_url(body: UrlSource, background: BackgroundTasks, uid: str = Depends(current_user_id)):
+async def add_url(body: UrlSource, uid: str = Depends(current_user_id)):
     if not body.url.startswith(("http://", "https://")):
         raise HTTPException(400, "URL must start with http:// or https://")
     doc = {
@@ -78,13 +67,12 @@ async def add_url(body: UrlSource, background: BackgroundTasks, uid: str = Depen
     }
     res = await db.sources().insert_one(doc)
     sid = str(res.inserted_id)
-    job_id = await _enqueue(background, uid, sid)
+    job_id = await _enqueue(uid, sid)
     return {"id": sid, "jobId": job_id, "status": "pending"}
 
 
 @router.post("/upload", status_code=201)
 async def upload_file(
-    background: BackgroundTasks,
     file: UploadFile = File(...),
     title: str = Form(""),
     uid: str = Depends(current_user_id),
@@ -121,7 +109,7 @@ async def upload_file(
     }})
 
     # 4) enqueue extraction (processor pulls bytes from S3 → text in Mongo)
-    job_id = await _enqueue(background, uid, sid)
+    job_id = await _enqueue(uid, sid)
     return {"id": sid, "jobId": job_id, "status": "pending"}
 
 
@@ -251,7 +239,6 @@ async def delete_source(
 @router.post("/{source_id}/reprocess")
 async def reprocess(
     source_id: str,
-    background: BackgroundTasks,
     uid: str = Depends(current_user_id),
     reset_extracted_data: bool = Query(
         False,
@@ -272,5 +259,5 @@ async def reprocess(
         {"$set": {"status": "pending", "stats": {}, "rawText": "", "cleanedText": "",
                   "charCount": 0, "chunkCount": 0, "updatedAt": now()}},
     )
-    job_id = await _enqueue(background, uid, source_id)
+    job_id = await _enqueue(uid, source_id)
     return {"jobId": job_id, "status": "pending"}

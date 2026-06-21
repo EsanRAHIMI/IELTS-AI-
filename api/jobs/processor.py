@@ -7,21 +7,24 @@ A job references a source. Processing:
   4. optionally AI-enrich the top items
   5. update job + source status with logs
 
-Runs inside the API process via a FastAPI BackgroundTask.
+Runs inside the API process via asyncio tasks (not tied to the browser session).
 """
 from __future__ import annotations
+import asyncio
 import logging
 
 import database as db
-from utils.serialization import now, oid
+from utils.serialization import now, oid, is_oid
 from ingestion.parsers import parse_url, parse_pdf_document, parse_bytes, ParsedDocument
 from extraction.extractor import extract, clean_text
 from extraction.ielts_markers import classify_sentence_section
-from jobs.schemas import JOB_PENDING, JOB_PROCESSING, JOB_DONE, JOB_FAILED
+from jobs.schemas import JOB_PENDING, JOB_PROCESSING, JOB_DONE, JOB_FAILED, JOB_CANCELLED_MSG, JOB_INTERRUPTED_MSG
 from storage import s3_service
 from ai import service as ai
 
 logger = logging.getLogger("ielts.jobs")
+
+_running_tasks: dict[str, asyncio.Task] = {}
 
 AI_ENRICH_TOP_WORDS = 15
 AI_ENRICH_TOP_PHRASES = 8
@@ -180,12 +183,63 @@ async def claim_job(job_id: str) -> dict | None:
 
 
 async def run_job_by_id(job_id: str) -> None:
-    """Claim (if still pending) and process a job by id. Called from the API's
-    FastAPI BackgroundTask."""
-    job = await claim_job(job_id)
-    if job is None:
-        return  # already claimed/processed
-    await process_job(job)
+    """Claim (if still pending) and process a job by id."""
+    try:
+        job = await claim_job(job_id)
+        if job is None:
+            return  # already claimed/processed
+        await process_job(job)
+    except asyncio.CancelledError:
+        doc = await db.jobs().find_one({"_id": oid(job_id)})
+        if doc and doc.get("status") == JOB_PROCESSING:
+            await _fail_job(job_id, doc.get("sourceId"), JOB_CANCELLED_MSG)
+        raise
+
+
+def schedule_job(job_id: str) -> None:
+    """Start a job task in the background (survives HTTP response; cancellable)."""
+    if job_id in _running_tasks and not _running_tasks[job_id].done():
+        return
+    task = asyncio.create_task(run_job_by_id(job_id))
+    _running_tasks[job_id] = task
+
+    def _done(t: asyncio.Task) -> None:
+        _running_tasks.pop(job_id, None)
+        if not t.cancelled() and t.exception():
+            logger.error("Job task %s exited with error", job_id)
+
+    task.add_done_callback(_done)
+
+
+async def cancel_job(job_id: str, user_id: str) -> bool:
+    """Stop a running job and mark it failed/cancelled."""
+    if not is_oid(job_id):
+        return False
+    job = await db.jobs().find_one({"_id": oid(job_id), "userId": user_id})
+    if not job or job["status"] in (JOB_DONE, JOB_FAILED):
+        return False
+
+    source_id = job.get("sourceId")
+    await _fail_job(job_id, source_id, JOB_CANCELLED_MSG)
+
+    task = _running_tasks.pop(job_id, None)
+    if task and not task.done():
+        task.cancel()
+    return True
+
+
+async def _fail_job(job_id: str, source_id: str | None, message: str) -> None:
+    await db.jobs().update_one(
+        {"_id": oid(job_id)},
+        {"$set": {"status": JOB_FAILED, "error": message, "finishedAt": now(), "updatedAt": now()}},
+    )
+    await _log(job_id, f"ERROR: {message}")
+    if source_id and is_oid(source_id):
+        await db.sources().update_one(
+            {"_id": oid(source_id)},
+            {"$set": {"status": "error", "updatedAt": now(),
+                      "stats.warnings": [message]}},
+        )
 
 
 async def process_job(job: dict) -> None:
@@ -414,33 +468,18 @@ async def create_job(user_id: str, source_id: str, kind: str = "process") -> str
 
 
 async def recover_orphaned_jobs() -> int:
-    """Re-queue jobs that were pending/processing when the API stopped.
-
-    Processing runs in the API process (not in the browser). After a crash or
-    ``uvicorn --reload``, in-flight jobs must be picked up again on startup.
-    """
-    import asyncio
+    """On API startup: fail interrupted jobs; re-queue only never-started pending ones."""
+    failed = 0
+    async for job in db.jobs().find({"status": JOB_PROCESSING}):
+        jid = str(job["_id"])
+        await _fail_job(jid, job.get("sourceId"), JOB_INTERRUPTED_MSG)
+        failed += 1
 
     resumed = 0
-    cur = db.jobs().find({"status": {"$in": [JOB_PENDING, JOB_PROCESSING]}})
-    async for job in cur:
-        jid = str(job["_id"])
-        sid = job.get("sourceId")
-        if job["status"] == JOB_PROCESSING:
-            await db.jobs().update_one(
-                {"_id": job["_id"]},
-                {
-                    "$set": {"status": JOB_PENDING, "updatedAt": now()},
-                    "$push": {"logs": {"t": now(), "msg": "Resumed after server restart"}},
-                },
-            )
-            if sid:
-                await db.sources().update_one(
-                    {"_id": oid(sid), "status": "processing"},
-                    {"$set": {"status": "pending", "updatedAt": now()}},
-                )
-        asyncio.create_task(run_job_by_id(jid))
+    async for job in db.jobs().find({"status": JOB_PENDING}):
+        schedule_job(str(job["_id"]))
         resumed += 1
-    if resumed:
-        logger.info("Recovered %d orphaned job(s)", resumed)
+
+    if failed or resumed:
+        logger.info("Startup job recovery: %d interrupted (failed), %d pending (resumed)", failed, resumed)
     return resumed
