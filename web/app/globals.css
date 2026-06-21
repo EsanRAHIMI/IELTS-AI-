@@ -58,9 +58,12 @@
     --safe-left: env(safe-area-inset-left, 0px);
     --app-bar-height: 4rem;
     --app-topbar-height: calc(var(--app-bar-height) + var(--safe-top));
-    --mobile-tab-bar-height: 4.25rem;
-    --mobile-tab-bar-gap: 0.625rem;
+    --mobile-tab-bar-height: 3.25rem;
+    --mobile-tab-bar-gap: 0.5rem;
     --mobile-tab-bar-offset: calc(var(--mobile-tab-bar-height) + var(--mobile-tab-bar-gap) + var(--safe-bottom));
+    --mobile-nav-scrim-height: var(--mobile-tab-bar-offset);
+    --ios-tab-active: #007aff;
+    --ios-tab-active-dark: #0a84ff;
   }
 
   html {
@@ -135,4 +138,96 @@
   * {
     @apply border-border;
   }
+}
+
+/* iOS 26 Liquid Glass — bottom nav scrim + tab bar */
+.mobile-nav-scrim {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: var(--mobile-nav-scrim-height);
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgb(8 10 18 / 0.88) 0%,
+    rgb(8 10 18 / 0.62) 42%,
+    rgb(8 10 18 / 0.28) 72%,
+    transparent 100%
+  );
+}
+
+.dark .mobile-nav-scrim {
+  background: linear-gradient(
+    to top,
+    rgb(0 0 0 / 0.92) 0%,
+    rgb(0 0 0 / 0.68) 42%,
+    rgb(0 0 0 / 0.32) 72%,
+    transparent 100%
+  );
+}
+
+.mobile-nav-glass {
+  position: relative;
+  isolation: isolate;
+  border-radius: 9999px;
+  padding: 0.25rem;
+  border: 1px solid rgb(255 255 255 / 0.35);
+  background: rgb(255 255 255 / 0.52);
+  box-shadow:
+    0 0 0 0.5px rgb(255 255 255 / 0.12) inset,
+    0 1px 0 rgb(255 255 255 / 0.55) inset,
+    0 8px 28px -6px rgb(0 0 0 / 0.22),
+    0 2px 10px -4px rgb(0 0 0 / 0.12);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+}
+
+.dark .mobile-nav-glass {
+  border-color: rgb(255 255 255 / 0.14);
+  background: rgb(28 28 30 / 0.58);
+  box-shadow:
+    0 0 0 0.5px rgb(255 255 255 / 0.08) inset,
+    0 1px 0 rgb(255 255 255 / 0.12) inset,
+    0 10px 32px -8px rgb(0 0 0 / 0.55),
+    0 2px 12px -4px rgb(0 0 0 / 0.35);
+}
+
+.mobile-nav-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.42) 0%,
+    rgb(255 255 255 / 0.06) 38%,
+    transparent 62%
+  );
+  pointer-events: none;
+}
+
+.dark .mobile-nav-glass::before {
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.14) 0%,
+    rgb(255 255 255 / 0.03) 40%,
+    transparent 65%
+  );
+}
+
+.mobile-nav-tab-active-pill {
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.72);
+  box-shadow:
+    0 0 0 0.5px rgb(0 122 255 / 0.12),
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 4px 14px -4px rgb(0 122 255 / 0.18);
+}
+
+.dark .mobile-nav-tab-active-pill {
+  background: rgb(255 255 255 / 0.14);
+  box-shadow:
+    0 0 0 0.5px rgb(10 132 255 / 0.22),
+    0 1px 3px rgb(0 0 0 / 0.35),
+    0 4px 16px -4px rgb(10 132 255 / 0.28);
 }

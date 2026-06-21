@@ -6,27 +6,21 @@ import { LayoutGroup, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { MOBILE_NAV_ITEMS, isMobileNavActive } from "@/lib/mobile-nav";
 
-const spring = { type: "spring" as const, stiffness: 520, damping: 38, mass: 0.8 };
+/** iOS-style spring — snappy with slight settle */
+const tabSpring = { type: "spring" as const, stiffness: 480, damping: 32, mass: 0.72 };
+const iconSpring = { type: "spring" as const, stiffness: 560, damping: 28, mass: 0.55 };
 
 export function MobileTabBar() {
   const pathname = usePathname();
 
   return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-40 pointer-events-none lg:hidden"
-      aria-label="Main navigation"
-    >
-      <div className="px-safe pb-safe-or-4 pt-2">
+    <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none lg:hidden" aria-hidden={false}>
+      {/* Bottom scrim — dims content behind nav for legibility */}
+      <div className="mobile-nav-scrim" aria-hidden="true" />
+
+      <nav className="relative px-safe pb-safe-or-4 pt-2" aria-label="Main navigation">
         <LayoutGroup id="mobile-tab-bar">
-          <div
-            className={cn(
-              "pointer-events-auto mx-auto flex max-w-md items-stretch gap-0.5 rounded-[1.75rem] border p-1.5",
-              "border-white/20 bg-background/55 shadow-[0_12px_40px_-8px_rgba(0,0,0,0.25)]",
-              "backdrop-blur-2xl backdrop-saturate-150",
-              "dark:border-white/10 dark:bg-background/45",
-              "supports-[backdrop-filter]:bg-background/50",
-            )}
-          >
+          <div className="mobile-nav-glass pointer-events-auto mx-auto flex max-w-[22.5rem] items-stretch">
             {MOBILE_NAV_ITEMS.map((item) => {
               const active = isMobileNavActive(pathname, item);
               const Icon = item.icon;
@@ -36,46 +30,58 @@ export function MobileTabBar() {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className="relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.35rem] px-1 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="relative flex min-w-0 flex-1 flex-col items-center justify-center rounded-full px-0.5 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ios-tab-active)] focus-visible:ring-offset-2"
                 >
                   {active && (
                     <motion.span
                       layoutId="mobile-tab-active-pill"
-                      className="absolute inset-0 rounded-[1.35rem] bg-primary/12 shadow-sm dark:bg-white/12"
-                      transition={spring}
+                      className="mobile-nav-tab-active-pill absolute inset-x-0.5 inset-y-0.5"
+                      transition={tabSpring}
                     />
                   )}
+
                   <motion.span
-                    className="relative z-10 flex flex-col items-center gap-0.5"
-                    animate={{
-                      scale: active ? 1.02 : 1,
-                      y: active ? -1 : 0,
-                    }}
-                    whileTap={{ scale: 0.92 }}
-                    transition={spring}
+                    className="relative z-10 flex min-h-[2.75rem] flex-col items-center justify-center gap-[0.2rem]"
+                    animate={{ scale: active ? 1 : 0.96 }}
+                    whileTap={{ scale: 0.88 }}
+                    transition={iconSpring}
                   >
-                    <Icon
+                    <motion.span
+                      animate={{
+                        y: active ? -0.5 : 0,
+                      }}
+                      transition={tabSpring}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-[1.35rem] w-[1.35rem] transition-colors duration-300 ease-out",
+                          active
+                            ? "text-[var(--ios-tab-active)] dark:text-[var(--ios-tab-active-dark)]"
+                            : "text-[rgb(142_142_147)] dark:text-[rgb(152_152_157)]",
+                        )}
+                        strokeWidth={active ? 2.4 : 1.65}
+                      />
+                    </motion.span>
+
+                    <motion.span
                       className={cn(
-                        "h-[22px] w-[22px] transition-colors duration-200",
-                        active ? "text-primary dark:text-accent" : "text-muted-foreground",
+                        "max-w-full truncate text-[0.625rem] leading-none tracking-[-0.01em]",
+                        active
+                          ? "font-semibold text-[var(--ios-tab-active)] dark:text-[var(--ios-tab-active-dark)]"
+                          : "font-medium text-[rgb(142_142_147)] dark:text-[rgb(152_152_157)]",
                       )}
-                      strokeWidth={active ? 2.25 : 1.75}
-                    />
-                    <span
-                      className={cn(
-                        "max-w-full truncate text-[10px] font-medium leading-none tracking-tight transition-colors duration-200",
-                        active ? "text-foreground" : "text-muted-foreground",
-                      )}
+                      animate={{ opacity: active ? 1 : 0.88 }}
+                      transition={{ duration: 0.2 }}
                     >
                       {item.label}
-                    </span>
+                    </motion.span>
                   </motion.span>
                 </Link>
               );
             })}
           </div>
         </LayoutGroup>
-      </div>
-    </nav>
+      </nav>
+    </div>
   );
 }
