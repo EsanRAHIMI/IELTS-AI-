@@ -25,8 +25,11 @@ Create **two applications** from the same repository, each with a different
 
 | Dokploy app | Root dir | Build command | Start command | Port |
 |---|---|---|---|---|
-| `ielts-api` | `api` | `pip install -r requirements.txt` | `python -m uvicorn main:app --host 0.0.0.0 --port 8010` | 8010 |
-| `ielts-web` | `web` | `npm install && npm run build` | `npm run start` | 3000 |
+| `ielts-api` | `api` | `pip install -r requirements.txt` | `sh start.sh` (or `python -m uvicorn main:app --host 0.0.0.0 --port 8010`) | **8010** |
+| `ielts-web` | `web` | `npm install && npm run build` | `npm run start` | **3000** |
+
+`api/nixpacks.toml` is included so Nixpacks installs **tesseract-ocr** and uses `start.sh`,
+which listens on `$PORT` (falls back to 8010).
 
 > **No worker service.** Source processing runs inside the API via FastAPI
 > BackgroundTasks, so only `api` and `web` are deployed.
@@ -49,13 +52,40 @@ AWS_S3_BUCKET=<bucket>
 AWS_S3_PUBLIC_BASE_URL=<optional-cloudfront-url>
 UPLOAD_DIR=/tmp/ielts          # transient parsing only; NOT persistent
 CORS_ORIGINS=https://your-web-domain
+PORT=8010
 ```
+
+> No comments (`# ...`) in Dokploy env — paste only `KEY=value` lines.  
+> Set `AI_PROVIDER` once (duplicate keys leave only the last value).  
+> No trailing slash on `CORS_ORIGINS` (use `https://ielts.najahai.com`, not `...com/`).
 
 **Web**:
 
 ```
-NEXT_PUBLIC_API_BASE_URL=https://your-api-domain
+NEXT_PUBLIC_API_BASE_URL=https://your-web-domain/api
 ```
+
+## 3b. Same-domain routing (`/api` path) — Dokploy domains
+
+When web and API share one host (e.g. `ielts.najahai.com`), add **two domains** in Dokploy:
+
+| Service | Host | Path | Strip path | Container port | HTTPS |
+|---|---|---|---|---|---|
+| `ielts-web` | `ielts.najahai.com` | `/` (empty) | off | **3000** | on |
+| `ielts-api` | `ielts.najahai.com` | `/api` | **on** | **8010** | on |
+
+- **Strip path** must be **on** for the API so `/api/auth/login` reaches the container as `/auth/login`.
+- **Container port** must match what uvicorn listens on (8010, or `$PORT` if set in env).
+- After changing domains, check Traefik logs in Dokploy if routes still fail.
+
+Quick check after deploy:
+
+```bash
+curl -s https://ielts.najahai.com/api/health
+# {"status":"ok","db":true,...}
+```
+
+A **502 Bad Gateway** on `/api/*` almost always means the API container is down or the domain’s **container port** is wrong — open the API app → **Logs** in Dokploy first.
 
 ## 4. Storage notes (important)
 

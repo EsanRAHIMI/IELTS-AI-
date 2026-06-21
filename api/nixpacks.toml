@@ -1,0 +1,11 @@
+# Dokploy / Nixpacks build for the FastAPI backend (root dir: api/).
+# Installs Tesseract for OCR; binds to $PORT (Dokploy) with fallback 8010.
+
+[phases.setup]
+aptPkgs = ["tesseract-ocr", "tesseract-ocr-eng"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "sh start.sh"

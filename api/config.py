@@ -63,7 +63,13 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        # Browsers send Origin without a trailing slash; normalize env values.
+        origins: list[str] = []
+        for o in self.cors_origins.split(","):
+            o = o.strip().rstrip("/")
+            if o:
+                origins.append(o)
+        return origins
 
     @property
     def s3_enabled(self) -> bool:
