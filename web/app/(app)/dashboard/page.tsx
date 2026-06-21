@@ -63,10 +63,10 @@ export default function DashboardPage() {
             <MiniStat icon={<Flame className="h-5 w-5" />} label="Learning streak" value={`${data?.streak ?? 0} d`} loading={loading} />
           </CardContent>
           <CardContent className="pt-0">
-            <div className="flex flex-wrap gap-3">
-              <Link href="/study"><Button className="gap-2">Start studying <ArrowRight className="h-4 w-4" /></Button></Link>
-              <Link href="/daily-plan"><Button variant="outline">View daily plan</Button></Link>
-              <Link href="/quiz"><Button variant="outline">Take a quiz</Button></Link>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Link href="/study" className="w-full sm:w-auto"><Button className="h-10 w-full gap-2 sm:w-auto">Start studying <ArrowRight className="h-4 w-4" /></Button></Link>
+              <Link href="/daily-plan" className="w-full sm:w-auto"><Button variant="outline" className="h-10 w-full sm:w-auto">View daily plan</Button></Link>
+              <Link href="/quiz" className="w-full sm:w-auto"><Button variant="outline" className="h-10 w-full sm:w-auto">Take a quiz</Button></Link>
             </div>
           </CardContent>
         </Card>

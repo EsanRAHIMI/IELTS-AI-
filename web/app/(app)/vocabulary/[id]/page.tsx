@@ -40,18 +40,18 @@ export default function WordDetailPage() {
       <Button variant="ghost" size="sm" className="gap-2" onClick={() => router.push("/vocabulary")}><ArrowLeft className="h-4 w-4" /> Back to ranker</Button>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-3xl">{word.word}</CardTitle>
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="break-words text-2xl sm:text-3xl">{word.word}</CardTitle>
               <Badge variant="outline">{word.partOfSpeech}</Badge>
               <Badge variant="outline">{word.difficulty}</Badge>
             </div>
             <span className={cn("mt-2 inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold", priorityColor(word.priorityScore))}>Priority {word.priorityScore} · freq {word.frequency}</span>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={addToStudy} className="gap-2"><Plus className="h-4 w-4" /> Study</Button>
-            <Button variant="outline" onClick={regenerate} disabled={busy} className="gap-2"><RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Regenerate</Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button onClick={addToStudy} className="h-10 flex-1 gap-2 sm:flex-none"><Plus className="h-4 w-4" /> Study</Button>
+            <Button variant="outline" onClick={regenerate} disabled={busy} className="h-10 flex-1 gap-2 sm:flex-none"><RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Regenerate</Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">

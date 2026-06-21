@@ -31,7 +31,10 @@ def _public(user: dict) -> dict:
 async def register(body: RegisterRequest):
     existing = await db.users().find_one({"email": body.email.lower()})
     if existing:
-        raise HTTPException(status_code=409, detail="Email already registered")
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this email already exists. Try signing in instead.",
+        )
     doc = {
         "email": body.email.lower(),
         "name": body.name or body.email.split("@")[0],
@@ -50,7 +53,10 @@ async def register(body: RegisterRequest):
 async def login(body: LoginRequest):
     user = await db.users().find_one({"email": body.email.lower()})
     if not user or not verify_password(body.password, user["passwordHash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password. Please check your credentials and try again.",
+        )
     token = create_access_token(str(user["_id"]))
     return {"accessToken": token, "tokenType": "bearer", "user": _public(user)}
 

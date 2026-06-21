@@ -48,9 +48,9 @@ export default function DailyPlanPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="flex items-center justify-between gap-3 p-5">
+          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="text-sm text-muted-foreground">Ready to go?</p><p className="font-semibold">Start your session</p></div>
-            <Link href="/study"><Button>Study now</Button></Link>
+            <Link href="/study" className="w-full sm:w-auto"><Button className="h-10 w-full sm:w-auto">Study now</Button></Link>
           </CardContent>
         </Card>
       </div>
@@ -97,9 +97,9 @@ export default function DailyPlanPage() {
 function PlanSection({ title, icon, count, onAdd, children }: { title: string; icon: React.ReactNode; count: number; onAdd: () => void; children: React.ReactNode }) {
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="flex items-center gap-2">{icon} {title} <Badge variant="muted">{count}</Badge></CardTitle>
-        {count > 0 && <Button size="sm" variant="outline" className="gap-1.5" onClick={onAdd}><Plus className="h-3.5 w-3.5" /> Add all</Button>}
+      <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base sm:text-lg">{icon} {title} <Badge variant="muted">{count}</Badge></CardTitle>
+        {count > 0 && <Button size="sm" variant="outline" className="h-9 w-full gap-1.5 sm:w-auto" onClick={onAdd}><Plus className="h-3.5 w-3.5" /> Add all</Button>}
       </CardHeader>
       <CardContent>{count ? children : <p className="text-sm text-muted-foreground">Nothing here yet — import sources or seed data.</p>}</CardContent>
     </Card>

@@ -74,7 +74,7 @@ export default function SettingsPage() {
             </Select>
           </div>
           {health && (
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="text-muted-foreground">Backend status:</span>
               <Badge variant={health.aiConfigured ? "success" : "muted"}>{health.aiConfigured ? `AI ready (${health.aiProvider})` : "AI key not set"}</Badge>
               <Badge variant={health.db ? "success" : "muted"}>{health.db ? "DB connected" : "DB offline"}</Badge>

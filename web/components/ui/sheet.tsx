@@ -41,3 +41,8 @@ export function Sheet({
     </div>
   );
 }
+
+/** Default padded content wrapper for sheets */
+export function SheetBody({ className, children }: { className?: string; children: React.ReactNode }) {
+  return <div className={cn("min-w-0 p-4 pt-14", className)}>{children}</div>;
+}

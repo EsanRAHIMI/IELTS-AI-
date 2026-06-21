@@ -69,6 +69,7 @@
   html {
     /* Required for env(safe-area-inset-*) on iOS PWA */
     height: 100%;
+    overflow-x: clip;
   }
 
   body {
@@ -76,6 +77,7 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     min-height: 100dvh;
     min-height: 100vh;
+    overflow-x: clip;
   }
 }
 
@@ -118,6 +120,13 @@
   }
   .pb-mobile-nav {
     padding-bottom: var(--mobile-tab-bar-offset);
+  }
+  .px-page {
+    padding-left: max(1rem, var(--safe-left));
+    padding-right: max(1rem, var(--safe-right));
+  }
+  .page-stack {
+    @apply min-w-0 space-y-4;
   }
   @media (min-width: 1024px) {
     .pb-mobile-nav {

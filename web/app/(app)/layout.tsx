@@ -74,16 +74,16 @@ function AppShell({
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen} side="left" className="max-w-[16rem] p-0">
         <Sidebar onNavigate={() => setMobileOpen(false)} />
       </Sheet>
-      <div className="flex min-h-app flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-app min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar onMenu={() => setMobileOpen(true)} title={title} />
         <main
           className={cn(
-            "flex-1 overflow-y-auto px-4 py-4 px-safe md:p-6 lg:p-8",
+            "flex-1 overflow-y-auto overflow-x-clip py-4 px-page md:p-6 lg:p-8",
             "pb-mobile-nav lg:pb-8",
             showPwaBanner && "max-lg:pb-[calc(var(--mobile-tab-bar-offset)+7.5rem)]",
           )}
         >
-          {children}
+          <div className="mx-auto min-w-0 max-w-6xl">{children}</div>
         </main>
         <PwaInstallBanner />
         <MobileTabBar />

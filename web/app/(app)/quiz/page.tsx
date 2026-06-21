@@ -50,11 +50,11 @@ export default function QuizPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <Card>
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <Tabs value={mode} onValueChange={setMode}>
+        <CardContent className="flex flex-col gap-3 p-4">
+          <Tabs value={mode} onValueChange={setMode} className="w-full">
             <TabsList>{MODES.map((m) => <TabsTrigger key={m.key} value={m.key}>{m.label}</TabsTrigger>)}</TabsList>
           </Tabs>
-          <Button onClick={() => start(mode)} disabled={loading}>{loading ? "Loading…" : "New quiz"}</Button>
+          <Button className="w-full sm:w-auto sm:self-end" onClick={() => start(mode)} disabled={loading}>{loading ? "Loading…" : "New quiz"}</Button>
         </CardContent>
       </Card>
 

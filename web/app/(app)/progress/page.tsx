@@ -101,10 +101,17 @@ export default function ProgressPage() {
           <CardContent className="h-64">
             {data.sourceCoverage.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.sourceCoverage.slice(0, 8)} layout="vertical" margin={{ left: 20 }}>
+                <BarChart data={data.sourceCoverage.slice(0, 8)} layout="vertical" margin={{ left: 4, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis type="category" dataKey="title" width={110} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis
+                    type="category"
+                    dataKey="title"
+                    width={72}
+                    tick={{ fontSize: 10 }}
+                    stroke="hsl(var(--muted-foreground))"
+                    tickFormatter={(v: string) => (v.length > 12 ? `${v.slice(0, 12)}…` : v)}
+                  />
                   <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
                   <Bar dataKey="words" fill="hsl(var(--primary))" name="Words" radius={[0, 4, 4, 0]} />
                 </BarChart>

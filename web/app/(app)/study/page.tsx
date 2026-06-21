@@ -86,9 +86,9 @@ export default function StudyPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="space-y-2">
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>Card {idx + 1} of {queue.length}</span>
-          <span className="flex items-center gap-1"><Keyboard className="h-4 w-4" /> Space reveal · 1–4 grade</span>
+          <span className="hidden items-center gap-1 sm:flex"><Keyboard className="h-4 w-4" /> Space reveal · 1–4 grade</span>
         </div>
         <Progress value={progress} />
       </div>
@@ -101,10 +101,10 @@ export default function StudyPage() {
           exit={{ opacity: 0, y: -16 }}
           transition={{ duration: 0.2 }}
         >
-          <Card className="min-h-[320px]">
-            <CardContent className="flex min-h-[320px] flex-col items-center justify-center gap-4 p-8 text-center">
+          <Card className="min-h-[280px] sm:min-h-[320px]">
+            <CardContent className="flex min-h-[280px] flex-col items-center justify-center gap-4 p-5 text-center sm:min-h-[320px] sm:p-8">
               <Badge variant="secondary">{current.type.replace("_", " ")}</Badge>
-              <p className="text-3xl font-bold">{current.front}</p>
+              <p className="max-w-full break-words text-2xl font-bold sm:text-3xl">{current.front}</p>
 
               {revealed ? (
                 <div className="w-full space-y-3 border-t pt-4 text-left">
@@ -127,9 +127,9 @@ export default function StudyPage() {
       </AnimatePresence>
 
       {revealed && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {GRADES.map((g) => (
-            <button key={g.key} onClick={() => grade(g.key)} className={`flex flex-col items-center rounded-md px-3 py-3 text-sm font-medium transition-colors ${g.cls}`}>
+            <button key={g.key} onClick={() => grade(g.key)} className={`flex min-h-[3.25rem] flex-col items-center justify-center rounded-xl px-2 py-3 text-sm font-medium transition-colors ${g.cls}`}>
               {g.label}<span className="text-xs opacity-70">{g.hint}</span>
             </button>
           ))}

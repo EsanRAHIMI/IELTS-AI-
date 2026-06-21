@@ -16,9 +16,12 @@ export function setToken(token: string | null) {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  detail: unknown;
+
+  constructor(message: string, status: number, detail?: unknown) {
     super(message);
     this.status = status;
+    this.detail = detail ?? message;
   }
 }
 
@@ -57,14 +60,20 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
     }
   }
   if (!res.ok) {
-    let detail = res.statusText;
+    let detail: unknown = res.statusText;
+    let message = res.statusText;
     try {
       const data = await res.json();
-      detail = data.detail || detail;
+      detail = data.detail ?? data.message ?? detail;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        message = detail.map((e: { msg?: string }) => e.msg).filter(Boolean).join(" ") || message;
+      }
     } catch {
       /* ignore */
     }
-    throw new ApiError(detail, res.status);
+    throw new ApiError(message, res.status, detail);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

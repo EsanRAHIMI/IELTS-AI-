@@ -126,7 +126,7 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="page-stack lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
       <Card>
         <CardHeader><CardTitle>Add a source</CardTitle></CardHeader>
         <CardContent>
@@ -200,39 +200,39 @@ export default function ImportPage() {
             const lastLog = job?.lastLog || job?.logs?.[job.logs.length - 1]?.msg;
             return (
             <div key={s.id} className="rounded-lg border p-3">
-              <div className="flex items-start gap-3">
-                <FileText className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+                <FileText className="h-5 w-5 shrink-0 text-muted-foreground sm:mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <button
                     type="button"
-                    className="truncate text-left font-medium hover:underline"
+                    className="line-clamp-2 text-left font-medium hover:underline"
                     onClick={() => setPreviewId(s.id)}
                   >
                     {s.title}
                   </button>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                     {(s.originalFileName || s.type).toString()} · {s.type.toUpperCase()} ·{" "}
                     {s.stats?.wordsExtracted ?? 0} words · {s.stats?.phrasesExtracted ?? 0} phrases
                   </p>
                   {["pending", "processing"].includes(s.status) && lastLog && (
-                    <p className="mt-1 truncate text-xs text-accent">{lastLog}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-accent">{lastLog}</p>
                   )}
                 </div>
                 <StatusBadge status={s.status} />
               </div>
-              <div className="mt-3 flex flex-wrap gap-1">
-                <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setPreviewId(s.id)}>
+              <div className="mt-3 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
+                <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setPreviewId(s.id)}>
                   <Eye className="h-3.5 w-3.5" /> Review
                 </Button>
                 {s.s3Key && (
-                  <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => download(s.id)}>
+                  <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => download(s.id)}>
                     <Download className="h-3.5 w-3.5" /> Original file
                   </Button>
                 )}
-                <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setActiveJob(s.id)}>
+                <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setActiveJob(s.id)}>
                   <FileText className="h-3.5 w-3.5" /> Logs
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setReprocessId(s.id)}>
+                <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setReprocessId(s.id)}>
                   <RefreshCw className="h-3.5 w-3.5" /> Reprocess
                 </Button>
                 {["pending", "processing"].includes(s.status) && (
