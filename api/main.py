@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
+from pymongo.errors import ServerSelectionTimeoutError
 
 from config import settings
 import database as db
@@ -44,10 +45,41 @@ app.add_middleware(
 )
 
 
+def _cors_headers(request: Request) -> dict[str, str]:
+    """Ensure error responses include CORS headers (browser blocks them otherwise)."""
+    origin = request.headers.get("origin")
+    if origin and origin in settings.cors_origins_list:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return {}
+
+
+@app.exception_handler(ServerSelectionTimeoutError)
+async def mongo_unavailable_handler(request: Request, exc: ServerSelectionTimeoutError):
+    logger.error("MongoDB unavailable on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "Database unavailable. Check MONGODB_URI and MongoDB Atlas "
+                "Network Access (add your IP or 0.0.0.0/0 for local dev)."
+            )
+        },
+        headers=_cors_headers(request),
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=_cors_headers(request),
+    )
 
 
 # Routers --------------------------------------------------------------------

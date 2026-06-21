@@ -1,5 +1,7 @@
 """MongoDB connection and collection helpers (async, via Motor)."""
 import logging
+
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from config import settings
@@ -13,7 +15,10 @@ _db: AsyncIOMotorDatabase | None = None
 def get_client() -> AsyncIOMotorClient:
     global _client
     if _client is None:
-        _client = AsyncIOMotorClient(settings.mongodb_uri, serverSelectionTimeoutMS=8000)
+        kwargs: dict = {"serverSelectionTimeoutMS": 8000}
+        if settings.mongodb_uri.startswith("mongodb+srv"):
+            kwargs["tlsCAFile"] = certifi.where()
+        _client = AsyncIOMotorClient(settings.mongodb_uri, **kwargs)
     return _client
 
 
