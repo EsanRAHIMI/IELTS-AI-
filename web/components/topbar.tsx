@@ -11,7 +11,7 @@ export function Topbar({ onMenu, title }: { onMenu: () => void; title: string })
   const { theme, toggle } = useTheme();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 pt-safe backdrop-blur md:px-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Menu">
           <Menu className="h-5 w-5" />
