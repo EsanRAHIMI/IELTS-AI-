@@ -28,8 +28,10 @@ Create **two applications** from the same repository, each with a different
 | `ielts-api` | `api` | `pip install -r requirements.txt` | `sh start.sh` (or `python -m uvicorn main:app --host 0.0.0.0 --port 8010`) | **8010** |
 | `ielts-web` | `web` | `npm install && npm run build` | `npm run start` | **3000** |
 
-`api/nixpacks.toml` is included so Nixpacks installs **tesseract-ocr** and uses `start.sh`,
-which listens on `$PORT` (falls back to 8010).
+`api/nixpacks.toml` installs **tesseract-ocr** via apt; Nixpacks auto-runs
+`pip install -r requirements.txt` for Python. Do **not** override the install
+phase with bare `pip` — Nixpacks puts pip in a venv and bare `pip` fails with
+`command not found`.
 
 > **No worker service.** Source processing runs inside the API via FastAPI
 > BackgroundTasks, so only `api` and `web` are deployed.
