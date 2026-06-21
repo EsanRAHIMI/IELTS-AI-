@@ -1,5 +1,6 @@
 """Application configuration loaded from environment variables."""
 from functools import lru_cache
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +24,28 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-3-5-sonnet-latest"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1"
+
+    # OCR (scanned/image PDF fallback via pytesseract + Pillow).
+    ocr_enabled: bool = True
+    ocr_dpi: int = 200
+    ocr_min_chars_per_page: int = 80
+    ocr_language: str = "eng"
+    ocr_max_pages: int = 0  # 0 / empty => process all pages
+
+    @field_validator("ocr_max_pages", mode="before")
+    @classmethod
+    def _empty_max_pages_is_zero(cls, v):
+        # OCR_MAX_PAGES= (empty string) should mean "all pages".
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return 0
+        return v
+
+    @field_validator("ocr_enabled", mode="before")
+    @classmethod
+    def _coerce_ocr_enabled(cls, v):
+        if isinstance(v, str):
+            return v.strip().lower() in {"1", "true", "yes", "on"}
+        return v
 
     # Temp dir for transient parsing only (never permanent storage).
     upload_dir: str = "./storage/tmp"

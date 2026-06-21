@@ -14,7 +14,7 @@ import logging
 
 import database as db
 from utils.serialization import now, oid
-from ingestion.parsers import parse_bytes, parse_url
+from ingestion.parsers import parse_url, parse_pdf_document, parse_bytes, ParsedDocument
 from extraction.extractor import extract, clean_text
 from extraction.ielts_markers import classify_sentence_section
 from jobs.schemas import JOB_PENDING, JOB_PROCESSING, JOB_DONE, JOB_FAILED
@@ -26,7 +26,15 @@ logger = logging.getLogger("ielts.jobs")
 AI_ENRICH_TOP_WORDS = 15
 AI_ENRICH_TOP_PHRASES = 8
 AI_ENRICH_TOP_PATTERNS = 5
-CHUNK_WORDS = 800
+
+# Chunking: target ~850 words per chunk with ~100-word overlap so context
+# straddling a boundary is not lost. A 400-page book yields dozens-hundreds.
+CHUNK_WORDS = 850
+CHUNK_OVERLAP = 100
+
+# Stored text caps (Mongo 16MB doc limit safety). Page-level text in
+# source_pages is NOT capped here so the full corpus survives.
+MAX_STORED_TEXT = 2_000_000
 
 
 async def _log(job_id, message: str):
@@ -37,26 +45,48 @@ async def _log(job_id, message: str):
     )
 
 
-async def _resolve_text(source: dict) -> tuple[str, str | None]:
-    """Return (text, title_override). Pulls binaries from S3; never reads
-    permanent local project storage."""
+class ResolvedSource:
+    """Outcome of turning a source into raw text. ``doc`` is set for PDFs and
+    carries page-level provenance (embedded text vs OCR)."""
+
+    def __init__(self, text: str, title_override: str | None = None,
+                 doc: ParsedDocument | None = None):
+        self.text = text
+        self.title_override = title_override
+        self.doc = doc
+
+
+async def _resolve_text(source: dict) -> ResolvedSource:
+    """Resolve a source to raw text. Pulls binaries from S3; never reads
+    permanent local project storage. PDFs get the rich page-level parse."""
     stype = source.get("type")
+    file_kind = (source.get("fileKind") or stype or "").lower()
     # File-backed sources: download bytes from S3 and parse in memory.
     if source.get("kind") == "file" or source.get("s3Key"):
         data = s3_service.download_bytes(source["s3Key"])
-        return parse_bytes(data, source.get("fileKind") or stype), None
+        if file_kind == "pdf":
+            doc = parse_pdf_document(data)
+            return ResolvedSource(doc.text, None, doc)
+        return ResolvedSource(parse_bytes(data, file_kind), None)
     if stype == "url":
         title, text = await parse_url(source["url"])
-        return text, title
+        return ResolvedSource(text, title)
     # Pasted text: rawText is the original input.
-    return source.get("rawText", ""), None
+    return ResolvedSource(source.get("rawText", ""))
 
 
 def _build_chunks(cleaned: str) -> list[dict]:
-    """Split cleaned text into word-bounded chunks with section + token count."""
+    """Split cleaned text into overlapping word-bounded chunks.
+
+    ~CHUNK_WORDS per chunk with CHUNK_OVERLAP words of overlap so phrases and
+    sentences spanning a boundary are still captured by the extractor.
+    """
     words = cleaned.split()
     chunks: list[dict] = []
-    for i in range(0, len(words), CHUNK_WORDS):
+    if not words:
+        return chunks
+    step = max(1, CHUNK_WORDS - CHUNK_OVERLAP)
+    for i in range(0, len(words), step):
         piece = " ".join(words[i : i + CHUNK_WORDS])
         if not piece.strip():
             continue
@@ -66,27 +96,74 @@ def _build_chunks(cleaned: str) -> list[dict]:
             "section": classify_sentence_section(piece[:600]),
             "tokenCount": len(piece.split()),
         })
+        if i + CHUNK_WORDS >= len(words):
+            break
     return chunks
 
 
-async def _store_text_and_chunks(user_id: str, source_id: str, raw: str) -> int:
+async def _store_pages(user_id: str, source_id: str, doc: ParsedDocument) -> None:
+    """Persist page-level extraction in source_pages (replacing any prior run)."""
+    await db.source_pages().delete_many({"sourceId": source_id})
+    if not doc.pages:
+        return
+    ts = now()
+    docs = [{
+        "userId": user_id, "sourceId": source_id, "pageNumber": p.pageNumber,
+        "text": p.text, "method": p.method, "charCount": p.charCount,
+        "warning": p.warning, "createdAt": ts, "updatedAt": ts,
+    } for p in doc.pages]
+    # Insert in batches to stay well under Mongo's per-batch limits.
+    for i in range(0, len(docs), 200):
+        await db.source_pages().insert_many(docs[i : i + 200])
+
+
+async def _store_text_and_chunks(user_id: str, source_id: str, raw: str, cleaned: str) -> int:
     """Persist raw + cleaned text on the source and chunks in source_chunks."""
-    cleaned = clean_text(raw)
     chunks = _build_chunks(cleaned)
     await db.sources().update_one(
         {"_id": oid(source_id)},
         {"$set": {
-            "rawText": raw[:500000], "cleanedText": cleaned[:500000],
+            "rawText": raw[:MAX_STORED_TEXT], "cleanedText": cleaned[:MAX_STORED_TEXT],
             "charCount": len(raw), "chunkCount": len(chunks), "updatedAt": now(),
         }},
     )
     # Replace any previous chunks (idempotent on reprocess).
     await db.source_chunks().delete_many({"sourceId": source_id})
     if chunks:
-        await db.source_chunks().insert_many(
-            [{**c, "sourceId": source_id, "userId": user_id, "createdAt": now()} for c in chunks]
-        )
+        for i in range(0, len(chunks), 200):
+            batch = chunks[i : i + 200]
+            await db.source_chunks().insert_many(
+                [{**c, "sourceId": source_id, "userId": user_id, "createdAt": now()} for c in batch]
+            )
     return len(chunks)
+
+
+def _quality_status(page_count: int, cleaned_chars: int, chunk_count: int,
+                    patterns_extracted: int, doc: ParsedDocument | None) -> tuple[str, list[str]]:
+    """Heuristics flagging likely-incomplete extraction (e.g. scanned PDF)."""
+    warnings: list[str] = list(doc.warnings) if doc else []
+    failed = False
+    warned = False
+
+    if cleaned_chars == 0:
+        failed = True
+        warnings.append("No text could be extracted from this source.")
+    if page_count > 30 and cleaned_chars < 100_000:
+        warned = True
+        warnings.append("Extraction may be incomplete. This PDF may be scanned or OCR failed.")
+    if chunk_count < 10 and page_count > 30:
+        warned = True
+        warnings.append(f"Only {chunk_count} chunks for {page_count} pages — text density is very low.")
+    if patterns_extracted == 0 and cleaned_chars > 50_000:
+        warned = True
+        warnings.append("No sentence patterns found despite a large corpus — extraction may be degraded.")
+
+    status = "failed" if failed else ("warning" if warned else "ok")
+
+    # de-dupe while preserving order
+    seen: set[str] = set()
+    deduped = [w for w in warnings if not (w in seen or seen.add(w))]
+    return status, deduped
 
 
 async def claim_job(job_id: str) -> dict | None:
@@ -125,18 +202,35 @@ async def process_job(job: dict) -> None:
 
     try:
         await db.sources().update_one({"_id": oid(source_id)}, {"$set": {"status": "processing"}})
-        text, title_override = await _resolve_text(source)
-        if title_override and not source.get("title"):
-            await db.sources().update_one({"_id": oid(source_id)}, {"$set": {"title": title_override}})
-        n_chunks = await _store_text_and_chunks(user_id, source_id, text)
-        await _log(job_id, f"Extracted {len(text)} characters of text into {n_chunks} chunks")
+        resolved = await _resolve_text(source)
+        text = resolved.text
+        doc = resolved.doc
+        if resolved.title_override and not source.get("title"):
+            await db.sources().update_one(
+                {"_id": oid(source_id)}, {"$set": {"title": resolved.title_override}})
 
-        result = extract(text)
-        await _log(
-            job_id,
-            f"Found {len(result.words)} words, {len(result.phrases)} phrases, "
-            f"{len(result.patterns)} patterns",
-        )
+        # Page-level provenance (PDFs only).
+        if doc is not None:
+            await _store_pages(user_id, source_id, doc)
+            await _log(job_id, f"PDF pages detected: {doc.pageCount}")
+            await _log(job_id, f"Embedded text pages: {doc.extractedPages}")
+            await _log(job_id, f"OCR pages: {doc.ocrPages}")
+            await _log(job_id, f"Empty pages: {doc.emptyPages}")
+            for w in doc.warnings:
+                await _log(job_id, f"WARNING: {w}")
+
+        # Clean once and reuse for storage, chunking AND extraction.
+        cleaned = clean_text(text)
+        n_chunks = await _store_text_and_chunks(user_id, source_id, text, cleaned)
+        await _log(job_id, f"Raw text chars: {len(text)}")
+        await _log(job_id, f"Cleaned text chars: {len(cleaned)}")
+        await _log(job_id, f"Chunks created: {n_chunks}")
+
+        # Extract on the FULL cleaned corpus (not a preview slice).
+        result = extract(cleaned)
+        await _log(job_id, f"Words extracted: {len(result.words)}")
+        await _log(job_id, f"Phrases extracted: {len(result.phrases)}")
+        await _log(job_id, f"Patterns extracted: {len(result.patterns)}")
 
         n_words = await _merge_words(user_id, source_id, result.words)
         n_phrases = await _merge_phrases(user_id, source_id, result.phrases)
@@ -149,9 +243,31 @@ async def process_job(job: dict) -> None:
         else:
             await _log(job_id, "No AI provider configured - skipping enrichment")
 
+        # Build the rich source.stats payload + quality assessment.
+        page_count = doc.pageCount if doc else 0
+        quality, warnings = _quality_status(
+            page_count, len(cleaned), n_chunks, len(result.patterns), doc)
+        stats = {
+            **result.stats,
+            "pageCount": page_count,
+            "extractedPages": doc.extractedPages if doc else 0,
+            "ocrPages": doc.ocrPages if doc else 0,
+            "emptyPages": doc.emptyPages if doc else 0,
+            "rawTextChars": len(text),
+            "cleanedTextChars": len(cleaned),
+            "chunkCount": n_chunks,
+            "wordsExtracted": len(result.words),
+            "phrasesExtracted": len(result.phrases),
+            "patternsExtracted": len(result.patterns),
+            "extractionMethod": doc.extractionMethod if doc else "text",
+            "qualityStatus": quality,
+            "warnings": warnings,
+        }
+        await _log(job_id, f"Quality status: {quality}")
+
         await db.sources().update_one(
             {"_id": oid(source_id)},
-            {"$set": {"status": "done", "stats": result.stats, "processedAt": now()}},
+            {"$set": {"status": "done", "stats": stats, "processedAt": now()}},
         )
         await db.jobs().update_one(
             {"_id": oid(job_id)},
@@ -161,7 +277,12 @@ async def process_job(job: dict) -> None:
         await _log(job_id, "Done")
     except Exception as exc:  # noqa: BLE001
         logger.exception("Job %s failed", job_id)
-        await db.sources().update_one({"_id": oid(source_id)}, {"$set": {"status": "error"}})
+        await db.sources().update_one(
+            {"_id": oid(source_id)},
+            {"$set": {"status": "error",
+                      "stats.qualityStatus": "failed",
+                      "stats.warnings": [f"Processing failed: {exc}"]}},
+        )
         await db.jobs().update_one(
             {"_id": oid(job_id)}, {"$set": {"status": JOB_FAILED, "error": str(exc), "finishedAt": now()}}
         )

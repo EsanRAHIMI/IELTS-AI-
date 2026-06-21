@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { UploadCloud, Link2, FileText, RefreshCw, Trash2, Loader2, CheckCircle2, AlertCircle, Download, Eye } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { UploadCloud, Link2, FileText, RefreshCw, Trash2, Loader2, CheckCircle2, AlertCircle, AlertTriangle, ScanLine, Layers, Download, Eye } from "lucide-react";
 import { api, BASE_URL, getToken } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import type { Source, Job } from "@/types";
@@ -224,26 +224,96 @@ function JobLogsDialog({ sourceId, onClose }: { sourceId: string | null; onClose
   );
 }
 
+function fmtBytes(n?: number) {
+  if (!n) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function Stat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-md border bg-secondary/30 px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium">{value}</div>
+    </div>
+  );
+}
+
 function SourcePreviewDialog({ sourceId, onClose }: { sourceId: string | null; onClose: () => void }) {
   const { data: source, loading } = useApiData<Source>(sourceId ? `/sources/${sourceId}` : null);
+  const st = source?.stats || {};
+  const num = (v?: number) => (v ?? 0).toLocaleString();
+  const quality = st.qualityStatus;
+  const method = st.extractionMethod;
+  const warnings = (st.warnings as string[] | undefined) || [];
+
   return (
     <Dialog open={!!sourceId} onOpenChange={(v) => !v && onClose()}>
-      <DialogHeader><DialogTitle>{source?.title || "Source text"}</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{source?.title || "Source detail"}</DialogTitle></DialogHeader>
       {loading || !source ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Quality / extraction badges */}
           <div className="flex flex-wrap gap-2 text-xs">
             <Badge variant="secondary">{source.type.toUpperCase()}</Badge>
-            {source.originalFileName && <Badge variant="outline">{source.originalFileName}</Badge>}
-            <Badge variant="outline">{(source.charCount ?? 0).toLocaleString()} chars</Badge>
-            {source.chunkCount != null && <Badge variant="outline">{source.chunkCount} chunks</Badge>}
-            {source.storage && <Badge variant="outline">stored: {source.storage}</Badge>}
+            {source.s3Key
+              ? <Badge variant="success" className="gap-1"><CheckCircle2 className="h-3 w-3" /> S3 stored</Badge>
+              : source.storage && <Badge variant="outline">stored: {source.storage}</Badge>}
+            {method === "ocr" && <Badge variant="accent" className="gap-1"><ScanLine className="h-3 w-3" /> OCR Used</Badge>}
+            {method === "mixed" && <Badge variant="accent" className="gap-1"><Layers className="h-3 w-3" /> Mixed Extraction</Badge>}
+            {quality === "warning" && (
+              <Badge variant="secondary" className="gap-1 bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-3 w-3" /> Warning: Low text extracted
+              </Badge>
+            )}
+            {quality === "failed" && (
+              <Badge variant="secondary" className="gap-1 bg-destructive/15 text-destructive">
+                <AlertCircle className="h-3 w-3" /> Extraction failed
+              </Badge>
+            )}
+            {quality === "ok" && (
+              <Badge variant="success" className="gap-1"><CheckCircle2 className="h-3 w-3" /> Quality OK</Badge>
+            )}
           </div>
-          <div className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md bg-secondary/50 p-3 text-sm leading-relaxed">
-            {(source.rawText || "").trim() || <span className="text-muted-foreground">No extracted text yet.</span>}
+
+          {/* Diagnostics grid */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Stat label="File type" value={source.type.toUpperCase()} />
+            <Stat label="File size" value={fmtBytes(source.sizeBytes)} />
+            <Stat label="Extraction" value={method || "text"} />
+            <Stat label="Page count" value={num(st.pageCount)} />
+            <Stat label="Embedded text pages" value={num(st.extractedPages)} />
+            <Stat label="OCR pages" value={num(st.ocrPages)} />
+            <Stat label="Empty pages" value={num(st.emptyPages)} />
+            <Stat label="Raw text chars" value={num(st.rawTextChars ?? source.charCount)} />
+            <Stat label="Cleaned text chars" value={num(st.cleanedTextChars)} />
+            <Stat label="Chunks" value={num(st.chunkCount ?? source.chunkCount)} />
+            <Stat label="Words extracted" value={num(st.wordsExtracted)} />
+            <Stat label="Phrases extracted" value={num(st.phrasesExtracted)} />
+            <Stat label="Patterns extracted" value={num(st.patternsExtracted)} />
           </div>
-          <p className="text-xs text-muted-foreground">Text is stored in MongoDB; the original file is stored in S3.</p>
+
+          {/* Warnings */}
+          {warnings.length > 0 && (
+            <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
+              {warnings.map((w, i) => (
+                <div key={i} className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span>{w}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Extracted text preview */}
+          <div>
+            <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Extracted text (preview)</div>
+            <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-secondary/50 p-3 text-sm leading-relaxed">
+              {(source.rawText || "").trim() || <span className="text-muted-foreground">No extracted text yet.</span>}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Text, pages &amp; chunks are stored in MongoDB; the original file is stored in S3.</p>
         </div>
       )}
     </Dialog>

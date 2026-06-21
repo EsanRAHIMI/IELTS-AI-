@@ -13,6 +13,10 @@ httpx>=0.28.1
 beautifulsoup4>=4.12.3
 PyMuPDF>=1.25.1
 python-docx>=1.1.2
+# OCR for scanned / image-based PDFs. Needs the tesseract binary installed
+# separately (macOS: brew install tesseract).
+pytesseract>=0.3.13
+Pillow>=10.4.0
 openai>=1.59.0
 anthropic>=0.42.0
 python-dotenv>=1.0.1

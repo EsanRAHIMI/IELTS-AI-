@@ -175,9 +175,10 @@ async def delete_source(source_id: str, uid: str = Depends(current_user_id)):
     # remove the original binary from S3 (or local fallback)
     if doc.get("s3Key"):
         s3_service.delete_object(doc["s3Key"])
-    # remove the source + its chunks from Mongo
+    # remove the source + its chunks/pages from Mongo
     await db.sources().delete_one({"_id": oid(source_id)})
     await db.source_chunks().delete_many({"sourceId": source_id})
+    await db.source_pages().delete_many({"sourceId": source_id})
     # detach from extracted items (keep items, just remove source ref)
     for c in (db.vocab(), db.phrases(), db.patterns()):
         await c.update_many({"userId": uid}, {"$pull": {"sourceIds": source_id}})
@@ -191,6 +192,15 @@ async def reprocess(source_id: str, background: BackgroundTasks, uid: str = Depe
     doc = await db.sources().find_one({"_id": oid(source_id), "userId": uid})
     if not doc:
         raise HTTPException(404, "Not found")
-    await db.sources().update_one({"_id": oid(source_id)}, {"$set": {"status": "pending"}})
+    # Wipe any data produced by a previous run so reprocessing starts clean.
+    await db.source_chunks().delete_many({"sourceId": source_id})
+    await db.source_pages().delete_many({"sourceId": source_id})
+    for c in (db.vocab(), db.phrases(), db.patterns()):
+        await c.update_many({"userId": uid}, {"$pull": {"sourceIds": source_id}})
+    await db.sources().update_one(
+        {"_id": oid(source_id)},
+        {"$set": {"status": "pending", "stats": {}, "rawText": "", "cleanedText": "",
+                  "charCount": 0, "chunkCount": 0, "updatedAt": now()}},
+    )
     job_id = await _enqueue(background, uid, source_id)
     return {"jobId": job_id, "status": "pending"}

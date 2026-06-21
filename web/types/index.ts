@@ -76,8 +76,29 @@ export interface Source {
   storage?: string;
   rawText?: string;
   cleanedText?: string;
-  stats?: Record<string, number>;
+  stats?: SourceStats;
+  processedAt?: string;
   createdAt: string;
+}
+
+export interface SourceStats {
+  tokenCount?: number;
+  sentenceCount?: number;
+  uniqueLemmas?: number;
+  wordsExtracted?: number;
+  phrasesExtracted?: number;
+  patternsExtracted?: number;
+  pageCount?: number;
+  extractedPages?: number;
+  ocrPages?: number;
+  emptyPages?: number;
+  rawTextChars?: number;
+  cleanedTextChars?: number;
+  chunkCount?: number;
+  extractionMethod?: string; // pdf_text | ocr | mixed | text | empty
+  qualityStatus?: string; // ok | warning | failed
+  warnings?: string[];
+  [key: string]: number | string | string[] | undefined;
 }
 
 export interface Job {

@@ -70,6 +70,15 @@ short-lived **presigned URL** from `GET /sources/{id}/download-url`.
 - Node.js 18+ (tested on 20/22)
 - A free **MongoDB Atlas** cluster (see `docs/MONGODB_ATLAS.md`)
 - *(Optional)* an OpenAI or Anthropic API key, or a local Ollama install
+- **Tesseract OCR** — needed to read scanned / image-based PDFs. Without it,
+  embedded-text PDFs still work and scanned PDFs fail gracefully with a warning.
+
+  ```bash
+  # macOS
+  brew install tesseract
+  # Ubuntu / Debian
+  sudo apt-get install -y tesseract-ocr
+  ```
 
 > Check your version with `python3 --version`. If you have 3.14 and want the
 > optional spaCy/pandas extras, install Python 3.12 (e.g. `brew install python@3.12`)

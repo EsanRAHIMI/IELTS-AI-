@@ -58,6 +58,10 @@ def source_chunks():
     return col("source_chunks")
 
 
+def source_pages():
+    return col("source_pages")
+
+
 def cards():
     return col("learning_cards")
 
@@ -87,6 +91,8 @@ async def init_indexes() -> None:
         await sources().create_index([("userId", 1), ("createdAt", -1)])
         await source_chunks().create_index([("sourceId", 1), ("index", 1)])
         await source_chunks().create_index([("userId", 1)])
+        await source_pages().create_index([("sourceId", 1), ("pageNumber", 1)])
+        await source_pages().create_index([("userId", 1)])
         await jobs().create_index([("status", 1), ("createdAt", 1)])
         await reviews().create_index([("userId", 1), ("reviewedAt", -1)])
         logger.info("Mongo indexes ensured")
