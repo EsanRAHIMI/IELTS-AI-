@@ -72,7 +72,7 @@ export interface Source {
   originalFileName?: string;
   mimeType?: string;
   sizeBytes?: number;
-  s3Key?: string;
+  hasFile?: boolean;
   storage?: string;
   rawText?: string;
   cleanedText?: string;

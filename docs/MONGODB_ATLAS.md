@@ -32,7 +32,7 @@ Indexes are ensured on startup (`api/database.py → init_indexes`): unique emai
 
 ```bash
 curl http://localhost:8010/health
-# {"status":"ok","db":true,"aiProvider":"openai","aiConfigured":false}
+# {"status":"ok","db":true}
 ```
 
 If `db` is `false`, re-check the URI, the database user, and Network Access.

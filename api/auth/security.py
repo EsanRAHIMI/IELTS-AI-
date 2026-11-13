@@ -27,16 +27,23 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(subject: str, extra: dict[str, Any] | None = None) -> str:
+def create_access_token(subject: str, *, token_version: int = 0, extra: dict[str, Any] | None = None) -> str:
     expire = now() + timedelta(minutes=settings.access_token_expire_minutes)
-    payload: dict[str, Any] = {"sub": subject, "exp": expire, "iat": now()}
+    payload: dict[str, Any] = {
+        "sub": subject,
+        "exp": expire,
+        "iat": now(),
+        "tv": int(token_version),
+    }
     if extra:
         payload.update(extra)
-    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    if settings.jwt_algorithm.upper() != "HS256":
+        raise RuntimeError("Only HS256 JWT tokens are supported")
+    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
 def decode_token(token: str) -> dict[str, Any] | None:
     try:
-        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
     except JWTError:
         return None

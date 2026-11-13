@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, setToken } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { User } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -38,7 +38,7 @@ export default function SettingsPage() {
   }, [user]);
 
   useEffect(() => {
-    api<{ aiConfigured: boolean; aiProvider: string; db: boolean }>("/health").then(setHealth).catch(() => {});
+    api<{ aiConfigured: boolean; aiProvider: string; db: boolean }>("/auth/session").then(setHealth).catch(() => {});
   }, []);
 
   function toggleModule(m: string) {
@@ -64,7 +64,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>AI provider</CardTitle>
-          <CardDescription>Choose which provider enriches your vocabulary. Configure API keys in the backend <code>api/.env</code>.</CardDescription>
+          <CardDescription>This choice is used for enrichment when that provider is configured on the server. API keys stay in the backend environment.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
@@ -122,7 +122,56 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <PasswordCard />
+
       <Button onClick={save} disabled={busy} className="gap-2"><Save className="h-4 w-4" /> {busy ? "Saving…" : "Save settings"}</Button>
     </div>
+  );
+}
+
+function PasswordCard() {
+  const { toast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function changePassword() {
+    setBusy(true);
+    try {
+      const res = await api<{ accessToken: string; user: User }>("/auth/change-password", {
+        method: "POST",
+        body: { currentPassword, newPassword },
+      });
+      setToken(res.accessToken);
+      setCurrentPassword("");
+      setNewPassword("");
+      toast({ title: "Password updated", variant: "success" });
+    } catch (e: any) {
+      toast({ title: "Could not change password", description: e.message, variant: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Password</CardTitle>
+        <CardDescription>Changing your password signs out other sessions.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Current password</Label>
+          <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>New password</Label>
+          <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+        </div>
+        <Button type="button" variant="outline" disabled={busy || newPassword.length < 6} onClick={changePassword}>
+          {busy ? "Updating…" : "Update password"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

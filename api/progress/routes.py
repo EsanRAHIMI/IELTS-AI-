@@ -2,7 +2,7 @@
 from __future__ import annotations
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 import database as db
 from auth.dependencies import current_user_id, get_current_user
@@ -59,7 +59,7 @@ async def dashboard(user: dict = Depends(get_current_user)):
 
 
 @router.get("/progress")
-async def progress(uid: str = Depends(current_user_id), days: int = 30):
+async def progress(uid: str = Depends(current_user_id), days: int = Query(30, ge=1, le=365)):
     start = now() - timedelta(days=days)
     # daily review counts & accuracy
     by_day: dict[str, dict] = {}

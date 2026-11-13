@@ -23,7 +23,11 @@ async def get_current_user(
     user = await db.users().find_one({"_id": oid(user_id)})
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return serialize(user)
+    if int(payload.get("tv") or 0) != int(user.get("tokenVersion") or 0):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    public = serialize(user)
+    public.pop("passwordHash", None)
+    return public
 
 
 def current_user_id(user: dict = Depends(get_current_user)) -> str:

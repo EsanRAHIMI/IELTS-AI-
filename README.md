@@ -58,7 +58,8 @@ No Docker required. Runs on macOS with simple commands.
 
 Upload flow: receive file → upload original to S3 → parse bytes in memory →
 store raw/cleaned text + chunks + extraction results in Mongo. Downloads use a
-short-lived **presigned URL** from `GET /sources/{id}/download-url`.
+short-lived **presigned URL** from `GET /sources/{id}/download-url`. The API
+does not return a stable unsigned object URL.
 
 ---
 
@@ -152,13 +153,14 @@ API docs: http://localhost:8010/docs · Health: http://localhost:8010/health
 From the repo root, with the **api venv activated** (so deps + `.env` load):
 
 ```bash
-python scripts/seed_ielts_data.py --email you@example.com --reset
+python scripts/seed_ielts_data.py --email you@example.com --password 'a-long-unique-password' --reset
 ```
 
-This creates the user (if new, default password `changeme123`), inserts
-**231 academic words, 109 phrases, 52 sentence patterns** (Persian meanings +
-English explanations + examples), and builds 70 starter flashcards. Log in with
-that email to see everything immediately.
+This creates the user when the email is new. Pass your own password with
+`--password`; the script no longer invents one. It inserts **231 academic
+words, 109 phrases, 52 sentence patterns** (Persian meanings + English
+explanations + examples), and builds 70 starter flashcards. Log in with that
+email to see everything immediately.
 
 ---
 

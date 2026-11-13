@@ -55,3 +55,30 @@ export function isPwaDismissed(): boolean {
 export function dismissPwaBanner(): void {
   localStorage.setItem(PWA_DISMISS_KEY, String(Date.now()));
 }
+
+function isApiRequest(url: string): boolean {
+  try {
+    return new URL(url).pathname.startsWith("/api/");
+  } catch {
+    return false;
+  }
+}
+
+/** Drop cached API responses, including leftovers from older service workers. */
+export async function clearApiCaches(): Promise<void> {
+  if (typeof caches === "undefined") return;
+  const keys = await caches.keys();
+  await Promise.all(
+    keys.map(async (key) => {
+      if (key.toLowerCase().includes("api")) {
+        await caches.delete(key);
+        return;
+      }
+      const cache = await caches.open(key);
+      const requests = await cache.keys();
+      await Promise.all(
+        requests.filter((request) => isApiRequest(request.url)).map((request) => cache.delete(request)),
+      );
+    }),
+  );
+}

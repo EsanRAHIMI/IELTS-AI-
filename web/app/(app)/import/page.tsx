@@ -13,6 +13,25 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 
+async function openDownload(id: string) {
+  const res = await api<{ url: string; authenticated?: boolean }>(`/sources/${id}/download-url`);
+  if (res.authenticated || res.url.startsWith("/")) {
+    const fileRes = await fetch(`${BASE_URL}${res.url}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!fileRes.ok) throw new Error("Download unavailable");
+    const blob = await fileRes.blob();
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = "source";
+    link.click();
+    URL.revokeObjectURL(href);
+    return;
+  }
+  window.open(res.url, "_blank");
+}
+
 export default function ImportPage() {
   const { toast } = useToast();
   const { data, loading, reload } = useApiData<{ items: Source[] }>("/sources");
@@ -29,8 +48,7 @@ export default function ImportPage() {
 
   async function download(id: string) {
     try {
-      const res = await api<{ url: string }>(`/sources/${id}/download-url`);
-      window.open(res.url, "_blank");
+      await openDownload(id);
     } catch (e: any) {
       toast({ title: "Download unavailable", description: e.message, variant: "error" });
     }
@@ -224,7 +242,7 @@ export default function ImportPage() {
                 <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setPreviewId(s.id)}>
                   <Eye className="h-3.5 w-3.5" /> Review
                 </Button>
-                {s.s3Key && (
+                {s.hasFile && (
                   <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => download(s.id)}>
                     <Download className="h-3.5 w-3.5" /> Original file
                   </Button>
@@ -350,7 +368,7 @@ function SourcePreviewDialog({ sourceId, onClose }: { sourceId: string | null; o
           {/* Quality / extraction badges */}
           <div className="flex flex-wrap gap-2 text-xs">
             <Badge variant="secondary">{source.type.toUpperCase()}</Badge>
-            {source.s3Key
+            {source.hasFile
               ? <Badge variant="success" className="gap-1"><CheckCircle2 className="h-3 w-3" /> S3 stored</Badge>
               : source.storage && <Badge variant="outline">stored: {source.storage}</Badge>}
             {method === "ocr" && <Badge variant="accent" className="gap-1"><ScanLine className="h-3 w-3" /> OCR Used</Badge>}
@@ -407,15 +425,14 @@ function SourcePreviewDialog({ sourceId, onClose }: { sourceId: string | null; o
           </div>
           <p className="text-xs text-muted-foreground">Text, pages &amp; chunks are stored in MongoDB; the original file is stored in S3.</p>
           <div className="flex flex-wrap gap-2 pt-1">
-            {source.s3Key && (
+            {source.hasFile && (
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-1"
                 onClick={async () => {
                   try {
-                    const res = await api<{ url: string }>(`/sources/${source.id}/download-url`);
-                    window.open(res.url, "_blank");
+                    await openDownload(source.id);
                   } catch (e: any) {
                     /* parent handles via toast if needed */
                   }

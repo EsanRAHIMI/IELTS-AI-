@@ -2,13 +2,15 @@
 from __future__ import annotations
 import random
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 import database as db
-from auth.dependencies import current_user_id
+from auth.dependencies import current_user_id, get_current_user
+from http_util import clamp_limit
 from utils.serialization import now, oid, is_oid, serialize
 from study import sm2
+from study.plan import focus_query, focus_skill_tokens, plan_sizes
 
 router = APIRouter(prefix="/study", tags=["study"])
 
@@ -77,16 +79,20 @@ async def add_card(body: AddCard, uid: str = Depends(current_user_id)):
 
 
 @router.get("/cards")
-async def list_cards(uid: str = Depends(current_user_id), status: str | None = None, limit: int = 100):
+async def list_cards(
+    uid: str = Depends(current_user_id),
+    status: str | None = None,
+    limit: int = Query(100, ge=1, le=100),
+):
     q: dict = {"userId": uid}
     if status:
         q["status"] = status
-    cur = db.cards().find(q).sort("nextReviewAt", 1).limit(limit)
+    cur = db.cards().find(q).sort("nextReviewAt", 1).limit(clamp_limit(limit, default=100, maximum=100))
     return {"items": [serialize(d) async for d in cur]}
 
 
 @router.get("/queue")
-async def review_queue(uid: str = Depends(current_user_id), limit: int = 40):
+async def review_queue(uid: str = Depends(current_user_id), limit: int = Query(40, ge=1, le=100)):
     """Cards that are due now (nextReviewAt <= now), new first."""
     q = {"userId": uid, "nextReviewAt": {"$lte": now()}}
     cur = db.cards().find(q).sort([("status", 1), ("nextReviewAt", 1)]).limit(limit)
@@ -96,7 +102,7 @@ async def review_queue(uid: str = Depends(current_user_id), limit: int = 40):
 
 
 class ReviewBody(BaseModel):
-    grade: str  # again | hard | good | easy
+    grade: str = Field(pattern="^(again|hard|good|easy)$")
 
 
 @router.post("/cards/{card_id}/review")
@@ -106,7 +112,10 @@ async def review_card(card_id: str, body: ReviewBody, uid: str = Depends(current
     card = await db.cards().find_one({"_id": oid(card_id), "userId": uid})
     if not card:
         raise HTTPException(404, "Not found")
-    update = sm2.review(card, body.grade)
+    try:
+        update = sm2.review(card, body.grade)
+    except ValueError:
+        raise HTTPException(400, "Invalid grade") from None
     await db.cards().update_one({"_id": oid(card_id)}, {"$set": {**update, "updatedAt": now()}})
     await db.reviews().insert_one({
         "userId": uid, "cardId": card_id, "type": card.get("type"), "grade": body.grade,
@@ -121,17 +130,22 @@ async def review_card(card_id: str, body: ReviewBody, uid: str = Depends(current
 
 # ---- Daily plan ------------------------------------------------------------
 @router.get("/daily-plan")
-async def daily_plan(uid: str = Depends(current_user_id)):
-    async def top(col, n, extra=None):
+async def daily_plan(user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    prefs = user.get("settings") or {}
+    sizes = plan_sizes(int(prefs.get("dailyTarget") or 30))
+    focus = focus_query(focus_skill_tokens(prefs.get("focusModules") or []))
+
+    async def top(col, n):
         q = {"userId": uid, "hidden": {"$ne": True}, "status": {"$in": ["new", "learning"]}}
-        if extra:
-            q.update(extra)
+        if focus:
+            q.update(focus)
         cur = col.find(q).sort("priorityScore", -1).limit(n)
         return [serialize(d) async for d in cur]
 
-    words = await top(db.vocab(), 30)
-    phrases = await top(db.phrases(), 15)
-    patterns = await top(db.patterns(), 10)
+    words = await top(db.vocab(), sizes["words"])
+    phrases = await top(db.phrases(), sizes["phrases"])
+    patterns = await top(db.patterns(), sizes["patterns"])
     due = await db.cards().count_documents({"userId": uid, "nextReviewAt": {"$lte": now()}})
     est_minutes = round(len(words) * 0.5 + len(phrases) * 0.6 + len(patterns) * 0.8 + due * 0.4)
     return {
@@ -141,12 +155,20 @@ async def daily_plan(uid: str = Depends(current_user_id)):
         "patterns": patterns,
         "dueCards": due,
         "estimatedMinutes": est_minutes,
+        "dailyTarget": sizes["words"],
+        "focusModules": prefs.get("focusModules") or [],
+        "targetBand": prefs.get("targetBand"),
+        "examDate": prefs.get("examDate"),
     }
 
 
 # ---- Quiz ------------------------------------------------------------------
 @router.get("/quiz")
-async def quiz(uid: str = Depends(current_user_id), mode: str = "meaning", count: int = 10):
+async def quiz(
+    uid: str = Depends(current_user_id),
+    mode: str = "meaning",
+    count: int = Query(10, ge=1, le=20),
+):
     """Generate quiz questions from enriched vocabulary/phrases."""
     pool = [d async for d in db.vocab().find(
         {"userId": uid, "hidden": {"$ne": True}, "simpleEnglishMeaning": {"$ne": ""}}

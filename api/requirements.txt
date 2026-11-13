@@ -1,30 +1,29 @@
-# Core backend dependencies. Pins are lower bounds (>=) so pip can pick the
-# newest build compatible with your Python version (works on 3.11 - 3.14).
-fastapi>=0.115.6
-uvicorn[standard]>=0.34.0
-motor>=3.6.0
-certifi>=2024.8.30
-pydantic>=2.10.4
-pydantic-settings>=2.7.1
-python-jose[cryptography]>=3.3.0
-bcrypt>=4.2.1
-python-multipart>=0.0.20
-httpx>=0.28.1
-beautifulsoup4>=4.12.3
-PyMuPDF>=1.25.1
-python-docx>=1.1.2
+# Core backend dependencies. Upper bounds stop a deploy from jumping a major
+# version. Compatible releases still pick patches inside the current line.
+fastapi>=0.115.6,<1
+uvicorn[standard]>=0.34.0,<1
+motor>=3.6.0,<4
+certifi>=2024.8.30,<2028
+pydantic>=2.10.4,<3
+pydantic-settings>=2.7.1,<3
+python-jose[cryptography]>=3.3.0,<4
+bcrypt>=4.2.1,<6
+python-multipart>=0.0.20,<1
+httpx>=0.28.1,<1
+beautifulsoup4>=4.12.3,<5
+PyMuPDF>=1.25.1,<2
+python-docx>=1.1.2,<2
 # OCR for scanned / image-based PDFs. Needs the tesseract binary installed
 # separately (macOS: brew install tesseract).
-pytesseract>=0.3.13
-Pillow>=10.4.0
-openai>=1.59.0
-anthropic>=0.42.0
-python-dotenv>=1.0.1
-email-validator>=2.2.0
-boto3>=1.35.0
+pytesseract>=0.3.13,<1
+Pillow>=10.4.0,<12
+openai>=1.59.0,<2
+anthropic>=0.42.0,<1
+python-dotenv>=1.0.1,<2
+email-validator>=2.2.0,<3
+boto3>=1.35.0,<2
 
 # Optional NLP/data extras (better lemmatisation + pandas CSV parsing) live in
 # requirements-nlp.txt. They are NOT required: the extractor falls back to a
 # built-in tokenizer/lemmatizer and CSV uses the stdlib if they are absent.
 # Install them only on Python <= 3.12:  pip install -r requirements-nlp.txt
-boto3
