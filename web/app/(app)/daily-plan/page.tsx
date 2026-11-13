@@ -18,6 +18,10 @@ interface Plan {
   patterns: Pattern[];
   dueCards: number;
   estimatedMinutes: number;
+  dailyTarget?: number;
+  focusModules?: string[];
+  targetBand?: number;
+  examDate?: string | null;
 }
 
 export default function DailyPlanPage() {
@@ -55,7 +59,15 @@ export default function DailyPlanPage() {
         </Card>
       </div>
 
-      <PlanSection title="Top 30 words" icon={<BookText className="h-5 w-5" />} count={data.words.length} onAdd={() => addAll("word", data.words)}>
+      {data.focusModules && data.focusModules.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Today&apos;s plan follows your target of {data.dailyTarget ?? data.words.length} and focus: {data.focusModules.join(", ")}
+          {data.examDate ? ` · exam ${data.examDate}` : ""}
+          {data.targetBand ? ` · band ${data.targetBand}` : ""}
+        </p>
+      )}
+
+      <PlanSection title="Words for today" icon={<BookText className="h-5 w-5" />} count={data.words.length} onAdd={() => addAll("word", data.words)}>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {data.words.map((w) => (
             <div key={w.id} className="flex items-center justify-between gap-2 rounded-md border p-2.5">
@@ -69,7 +81,7 @@ export default function DailyPlanPage() {
         </div>
       </PlanSection>
 
-      <PlanSection title="Top 15 phrases" icon={<Quote className="h-5 w-5" />} count={data.phrases.length} onAdd={() => addAll("phrase", data.phrases)}>
+      <PlanSection title="Phrases for today" icon={<Quote className="h-5 w-5" />} count={data.phrases.length} onAdd={() => addAll("phrase", data.phrases)}>
         <div className="grid gap-2 sm:grid-cols-2">
           {data.phrases.map((p) => (
             <div key={p.id} className="rounded-md border p-2.5">
@@ -80,7 +92,7 @@ export default function DailyPlanPage() {
         </div>
       </PlanSection>
 
-      <PlanSection title="Top 10 sentence patterns" icon={<Layers className="h-5 w-5" />} count={data.patterns.length} onAdd={() => addAll("sentence_pattern", data.patterns)}>
+      <PlanSection title="Sentence patterns for today" icon={<Layers className="h-5 w-5" />} count={data.patterns.length} onAdd={() => addAll("sentence_pattern", data.patterns)}>
         <div className="space-y-2">
           {data.patterns.map((p) => (
             <div key={p.id} className="rounded-md border p-2.5">

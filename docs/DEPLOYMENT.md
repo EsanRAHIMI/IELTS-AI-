@@ -113,8 +113,10 @@ Set **`API_ROOT_PREFIX=/api`** in the API environment and redeploy.
 ## 5. Notes
 
 - Set `CORS_ORIGINS` on the API to your deployed web domain.
-- The API serves Swagger at `/docs`; lock it down or disable in production if
-  desired.
+- Swagger is served only for local development. A public CORS origin, `API_ROOT_PREFIX`,
+  or `APP_ENV=production` turns `/docs` off.
+- The API refuses to start outside local development when `JWT_SECRET` is missing,
+  shorter than 32 characters, or still set to a known placeholder.
 - Atlas **Network Access** must allow your Dokploy host's IP (or `0.0.0.0/0`).
 - Run the seed script once against production:
-  `python scripts/seed_ielts_data.py --email you@example.com`.
+  `python scripts/seed_ielts_data.py --email you@example.com --password '<long-unique-password>'`.

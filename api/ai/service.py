@@ -59,7 +59,7 @@ SYSTEM = (
 )
 
 
-async def explain_word(word: str, pos: str = "", context: str = "") -> dict:
+async def explain_word(word: str, pos: str = "", context: str = "", provider_name: str | None = None) -> dict:
     """Return enrichment dict for a word. Falls back to empty fields if no AI."""
     fallback = {
         "persianMeaning": "",
@@ -71,7 +71,7 @@ async def explain_word(word: str, pos: str = "", context: str = "") -> dict:
         "commonMistakes": [],
         "notes": "",
     }
-    provider = get_provider()
+    provider = get_provider(provider_name)
     if not provider:
         return fallback
     prompt = (
@@ -92,9 +92,9 @@ async def explain_word(word: str, pos: str = "", context: str = "") -> dict:
         return fallback
 
 
-async def explain_phrase(phrase: str, context: str = "") -> dict:
+async def explain_phrase(phrase: str, context: str = "", provider_name: str | None = None) -> dict:
     fallback = {"persianMeaning": "", "simpleEnglishMeaning": "", "examples": [], "notes": "", "register": "academic"}
-    provider = get_provider()
+    provider = get_provider(provider_name)
     if not provider:
         return fallback
     prompt = (
@@ -112,9 +112,9 @@ async def explain_phrase(phrase: str, context: str = "") -> dict:
         return fallback
 
 
-async def classify_pattern(sentence: str) -> dict:
+async def classify_pattern(sentence: str, provider_name: str | None = None) -> dict:
     fallback = {"category": "Reading academic structures", "template": sentence, "notes": "", "usefulness": 60}
-    provider = get_provider()
+    provider = get_provider(provider_name)
     if not provider:
         return fallback
     prompt = (

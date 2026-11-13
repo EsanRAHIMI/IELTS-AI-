@@ -13,6 +13,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 from config import settings
 import database as db
 from ai import service as ai
+from security_policy import enforce_startup
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +26,7 @@ API_PREFIX = settings.api_prefix
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    enforce_startup(settings)
     logger.info("Starting IELTS AI Mastery Engine API")
     ok = await db.ping()
     if ok:
@@ -42,13 +44,14 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down")
 
 
+_docs = settings.local_dev
 app = FastAPI(
     title="IELTS AI Mastery Engine",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url=f"{API_PREFIX}/docs" if API_PREFIX else "/docs",
-    openapi_url=f"{API_PREFIX}/openapi.json" if API_PREFIX else "/openapi.json",
-    redoc_url=f"{API_PREFIX}/redoc" if API_PREFIX else "/redoc",
+    docs_url=(f"{API_PREFIX}/docs" if API_PREFIX else "/docs") if _docs else None,
+    openapi_url=(f"{API_PREFIX}/openapi.json" if API_PREFIX else "/openapi.json") if _docs else None,
+    redoc_url=(f"{API_PREFIX}/redoc" if API_PREFIX else "/redoc") if _docs else None,
 )
 
 app.add_middleware(
@@ -77,12 +80,7 @@ async def mongo_unavailable_handler(request: Request, exc: ServerSelectionTimeou
     logger.error("MongoDB unavailable on %s %s: %s", request.method, request.url.path, exc)
     return JSONResponse(
         status_code=503,
-        content={
-            "detail": (
-                "Database unavailable. Check MONGODB_URI and MongoDB Atlas "
-                "Network Access (add your IP or 0.0.0.0/0 for local dev)."
-            )
-        },
+        content={"detail": "Database unavailable"},
         headers=_cors_headers(request),
     )
 
@@ -117,12 +115,7 @@ api_router.include_router(progress_router)
 
 @api_router.get("/health", tags=["meta"])
 async def health():
-    return {
-        "status": "ok",
-        "db": await db.ping(),
-        "aiProvider": settings.ai_provider,
-        "aiConfigured": ai.ai_available(),
-    }
+    return {"status": "ok", "db": await db.ping()}
 
 
 @api_router.get("/", tags=["meta"])

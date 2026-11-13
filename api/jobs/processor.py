@@ -13,18 +13,25 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from pymongo.errors import DuplicateKeyError
+
 import database as db
+from config import settings
 from utils.serialization import now, oid, is_oid
 from ingestion.parsers import parse_url, parse_pdf_document, parse_bytes, ParsedDocument
 from extraction.extractor import extract, clean_text
 from extraction.ielts_markers import classify_sentence_section
+from jobs.merge_stats import apply_source_stats
 from jobs.schemas import JOB_PENDING, JOB_PROCESSING, JOB_DONE, JOB_FAILED, JOB_CANCELLED_MSG, JOB_INTERRUPTED_MSG
 from storage import s3_service
 from ai import service as ai
+from quotas import consume_ai_call
+from security_policy import public_job_error
 
 logger = logging.getLogger("ielts.jobs")
 
 _running_tasks: dict[str, asyncio.Task] = {}
+_job_slots = asyncio.Semaphore(max(1, settings.max_concurrent_jobs))
 
 AI_ENRICH_TOP_WORDS = 15
 AI_ENRICH_TOP_PHRASES = 8
@@ -66,11 +73,11 @@ async def _resolve_text(source: dict) -> ResolvedSource:
     file_kind = (source.get("fileKind") or stype or "").lower()
     # File-backed sources: download bytes from S3 and parse in memory.
     if source.get("kind") == "file" or source.get("s3Key"):
-        data = s3_service.download_bytes(source["s3Key"])
+        data = await asyncio.to_thread(s3_service.download_bytes, source["s3Key"])
         if file_kind == "pdf":
-            doc = parse_pdf_document(data)
+            doc = await asyncio.to_thread(parse_pdf_document, data)
             return ResolvedSource(doc.text, None, doc)
-        return ResolvedSource(parse_bytes(data, file_kind), None)
+        return ResolvedSource(await asyncio.to_thread(parse_bytes, data, file_kind), None)
     if stype == "url":
         title, text = await parse_url(source["url"])
         return ResolvedSource(text, title)
@@ -112,7 +119,8 @@ async def _store_pages(user_id: str, source_id: str, doc: ParsedDocument) -> Non
     ts = now()
     docs = [{
         "userId": user_id, "sourceId": source_id, "pageNumber": p.pageNumber,
-        "text": p.text, "method": p.method, "charCount": p.charCount,
+        "text": (p.text or "")[: settings.max_page_chars], "method": p.method,
+        "charCount": p.charCount,
         "warning": p.warning, "createdAt": ts, "updatedAt": ts,
     } for p in doc.pages]
     # Insert in batches to stay well under Mongo's per-batch limits.
@@ -182,18 +190,40 @@ async def claim_job(job_id: str) -> dict | None:
     )
 
 
+async def _still_processing(job_id: str) -> bool:
+    doc = await db.jobs().find_one({"_id": oid(job_id)}, {"status": 1})
+    return bool(doc and doc.get("status") == JOB_PROCESSING)
+
+
+async def _source_alive(source_id: str, user_id: str) -> bool:
+    if not is_oid(source_id):
+        return False
+    doc = await db.sources().find_one({"_id": oid(source_id), "userId": user_id}, {"_id": 1})
+    return doc is not None
+
+
+async def _gate(job_id: str, source_id: str, user_id: str) -> bool:
+    """Stop writing when another replica cancelled the job or the source was deleted."""
+    return await _still_processing(job_id) and await _source_alive(source_id, user_id)
+
+
 async def run_job_by_id(job_id: str) -> None:
-    """Claim (if still pending) and process a job by id."""
-    try:
-        job = await claim_job(job_id)
-        if job is None:
-            return  # already claimed/processed
-        await process_job(job)
-    except asyncio.CancelledError:
-        doc = await db.jobs().find_one({"_id": oid(job_id)})
-        if doc and doc.get("status") == JOB_PROCESSING:
-            await _fail_job(job_id, doc.get("sourceId"), JOB_CANCELLED_MSG)
-        raise
+    """Claim (if still pending) and process a job by id, off the request path."""
+    async with _job_slots:
+        try:
+            job = await claim_job(job_id)
+            if job is None:
+                return
+            try:
+                await asyncio.wait_for(process_job(job), timeout=settings.job_timeout_seconds)
+            except asyncio.TimeoutError:
+                if await _still_processing(job_id):
+                    await _fail_job(job_id, job.get("sourceId"), "Processing timed out")
+        except asyncio.CancelledError:
+            doc = await db.jobs().find_one({"_id": oid(job_id)})
+            if doc and doc.get("status") == JOB_PROCESSING:
+                await _fail_job(job_id, doc.get("sourceId"), JOB_CANCELLED_MSG)
+            raise
 
 
 def schedule_job(job_id: str) -> None:
@@ -228,6 +258,17 @@ async def cancel_job(job_id: str, user_id: str) -> bool:
     return True
 
 
+async def cancel_jobs_for_source(user_id: str, source_id: str) -> None:
+    """Stop every active job for a source before it is deleted or reprocessed."""
+    cur = db.jobs().find({
+        "userId": user_id,
+        "sourceId": source_id,
+        "status": {"$in": [JOB_PENDING, JOB_PROCESSING]},
+    })
+    async for doc in cur:
+        await cancel_job(str(doc["_id"]), user_id)
+
+
 async def _fail_job(job_id: str, source_id: str | None, message: str) -> None:
     await db.jobs().update_one(
         {"_id": oid(job_id)},
@@ -249,19 +290,27 @@ async def process_job(job: dict) -> None:
     source_id = job["sourceId"]
     await _log(job_id, "Started processing")
 
-    source = await db.sources().find_one({"_id": oid(source_id)})
+    source = await db.sources().find_one({"_id": oid(source_id), "userId": user_id})
     if not source:
-        await db.jobs().update_one({"_id": oid(job_id)}, {"$set": {"status": JOB_FAILED, "error": "source not found"}})
+        if await _still_processing(job_id):
+            await _fail_job(job_id, source_id, "Processing failed")
         return
 
     try:
-        await db.sources().update_one({"_id": oid(source_id)}, {"$set": {"status": "processing"}})
+        await db.sources().update_one(
+            {"_id": oid(source_id), "userId": user_id},
+            {"$set": {"status": "processing"}},
+        )
         resolved = await _resolve_text(source)
+        if not await _gate(job_id, source_id, user_id):
+            return
         text = resolved.text
         doc = resolved.doc
         if resolved.title_override and not source.get("title"):
             await db.sources().update_one(
-                {"_id": oid(source_id)}, {"$set": {"title": resolved.title_override}})
+                {"_id": oid(source_id), "userId": user_id},
+                {"$set": {"title": resolved.title_override}},
+            )
 
         # Page-level provenance (PDFs only).
         if doc is not None:
@@ -280,8 +329,10 @@ async def process_job(job: dict) -> None:
         await _log(job_id, f"Cleaned text chars: {len(cleaned)}")
         await _log(job_id, f"Chunks created: {n_chunks}")
 
-        # Extract on the FULL cleaned corpus (not a preview slice).
-        result = extract(cleaned)
+        # Extract on the full cleaned corpus, off the event loop.
+        result = await asyncio.to_thread(extract, cleaned)
+        if not await _gate(job_id, source_id, user_id):
+            return
         await _log(job_id, f"Words extracted: {len(result.words)}")
         await _log(job_id, f"Phrases extracted: {len(result.phrases)}")
         await _log(job_id, f"Patterns extracted: {len(result.patterns)}")
@@ -292,11 +343,12 @@ async def process_job(job: dict) -> None:
         n_patterns = await _merge_patterns(user_id, source_id, result.patterns)
         await _log(job_id, f"Merged into DB: +{n_words} words, +{n_phrases} phrases, +{n_patterns} patterns")
 
-        if ai.ai_available():
-            await _log(job_id, "AI provider available - enriching top items")
-            await _enrich_top(user_id, source_id, job_id)
+        provider_name = await _user_provider(user_id)
+        if ai.get_provider(provider_name):
+            await _log(job_id, f"AI provider '{provider_name}' - enriching top items")
+            await _enrich_top(user_id, source_id, job_id, provider_name)
         else:
-            await _log(job_id, "No AI provider configured - skipping enrichment")
+            await _log(job_id, f"AI provider '{provider_name}' is not configured - skipping enrichment")
 
         # Build the rich source.stats payload + quality assessment.
         page_count = doc.pageCount if doc else 0
@@ -320,77 +372,105 @@ async def process_job(job: dict) -> None:
         }
         await _log(job_id, f"Quality status: {quality}")
 
-        await db.sources().update_one(
-            {"_id": oid(source_id)},
-            {"$set": {"status": "done", "stats": stats, "processedAt": now()}},
-        )
-        await db.jobs().update_one(
-            {"_id": oid(job_id)},
+        if not await _gate(job_id, source_id, user_id):
+            return
+        # Only the worker that still owns the processing row may mark it done.
+        finished = await db.jobs().update_one(
+            {"_id": oid(job_id), "status": JOB_PROCESSING},
             {"$set": {"status": JOB_DONE, "finishedAt": now(),
                       "result": {"words": n_words, "phrases": n_phrases, "patterns": n_patterns}}},
         )
-        await _log(job_id, "Done")
+        if finished.modified_count:
+            await db.sources().update_one(
+                {"_id": oid(source_id), "userId": user_id},
+                {"$set": {"status": "done", "stats": stats, "processedAt": now()}},
+            )
+            await _log(job_id, "Done")
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.exception("Job %s failed", job_id)
-        await db.sources().update_one(
-            {"_id": oid(source_id)},
-            {"$set": {"status": "error",
-                      "stats.qualityStatus": "failed",
-                      "stats.warnings": [f"Processing failed: {exc}"]}},
-        )
-        await db.jobs().update_one(
-            {"_id": oid(job_id)}, {"$set": {"status": JOB_FAILED, "error": str(exc), "finishedAt": now()}}
-        )
-        await _log(job_id, f"ERROR: {exc}")
+        if await _still_processing(job_id):
+            await _fail_job(job_id, source_id, public_job_error(exc))
 
 
 # Merge helpers --------------------------------------------------------------
+def _joined(existing: dict | None, key: str, extra: list, limit: int) -> list:
+    base = (existing or {}).get(key) or []
+    return list(dict.fromkeys(list(base) + list(extra or [])))[:limit]
+
+
 async def _merge_words(user_id: str, source_id: str, words: list[dict]) -> int:
+    from extraction import scoring
+
     added = 0
     for w in words:
         existing = await db.vocab().find_one({"userId": user_id, "lemma": w["lemma"]})
+        stats = apply_source_stats(existing, source_id, w.get("frequency") or 0)
+        collocs = _joined(existing, "collocations", w.get("collocations") or [], 8)
+        examples = _joined(existing, "examples", w.get("examples") or [], 5)
+        use_cases = (existing or w).get("ieltsUseCases") or w.get("ieltsUseCases") or []
+        difficulty = (existing or w).get("difficulty") or w.get("difficulty") or ""
+        ps = scoring.score_word(
+            frequency=stats["frequency"], difficulty=difficulty, lemma=w["lemma"],
+            n_collocations=len(collocs), ielts_use_cases=use_cases, source_count=len(stats["sourceIds"]),
+        )
+        fields = {
+            "frequency": stats["frequency"], "sourceFrequency": stats["sourceFrequency"],
+            "sourceIds": stats["sourceIds"], "priorityScore": ps,
+            "collocations": collocs, "examples": examples, "updatedAt": now(),
+        }
         if existing:
-            new_freq = existing.get("frequency", 0) + w["frequency"]
-            src_ids = list(set(existing.get("sourceIds", []) + [source_id]))
-            from extraction import scoring
-            ps = scoring.score_word(
-                frequency=new_freq, difficulty=existing.get("difficulty", w["difficulty"]),
-                lemma=w["lemma"], n_collocations=len(set(existing.get("collocations", []) + w["collocations"])),
-                ielts_use_cases=existing.get("ieltsUseCases", w["ieltsUseCases"]), source_count=len(src_ids),
-            )
-            await db.vocab().update_one(
-                {"_id": existing["_id"]},
-                {"$set": {
-                    "frequency": new_freq, "priorityScore": ps, "sourceIds": src_ids,
-                    "collocations": list(dict.fromkeys(existing.get("collocations", []) + w["collocations"]))[:8],
-                    "examples": list(dict.fromkeys(existing.get("examples", []) + w["examples"]))[:5],
-                    "updatedAt": now(),
-                }},
-            )
-        else:
-            doc = {**w, "userId": user_id, "sourceIds": [source_id], "status": "new",
-                   "important": False, "hidden": False, "createdAt": now(), "updatedAt": now()}
+            await db.vocab().update_one({"_id": existing["_id"], "userId": user_id}, {"$set": fields})
+            continue
+        doc = {**w, **fields, "userId": user_id, "status": "new", "important": False, "hidden": False, "createdAt": now()}
+        try:
             await db.vocab().insert_one(doc)
             added += 1
+        except DuplicateKeyError:
+            existing = await db.vocab().find_one({"userId": user_id, "lemma": w["lemma"]})
+            if not existing:
+                continue
+            stats = apply_source_stats(existing, source_id, w.get("frequency") or 0)
+            fields["frequency"] = stats["frequency"]
+            fields["sourceFrequency"] = stats["sourceFrequency"]
+            fields["sourceIds"] = stats["sourceIds"]
+            await db.vocab().update_one({"_id": existing["_id"], "userId": user_id}, {"$set": fields})
     return added
 
 
 async def _merge_phrases(user_id: str, source_id: str, phrases: list[dict]) -> int:
+    from extraction import scoring
+
     added = 0
     for p in phrases:
         existing = await db.phrases().find_one({"userId": user_id, "phrase": p["phrase"]})
+        stats = apply_source_stats(existing, source_id, p.get("frequency") or 0)
+        section = (existing or p).get("section") or ""
+        confidence = (existing or p).get("confidence") or p.get("confidence") or 0
+        length = (existing or p).get("length") or p.get("length") or len(str(p.get("phrase") or "").split())
+        ps = scoring.score_phrase(
+            frequency=stats["frequency"], confidence=confidence, length=length, category=section,
+        )
+        fields = {
+            "frequency": stats["frequency"], "sourceFrequency": stats["sourceFrequency"],
+            "sourceIds": stats["sourceIds"], "priorityScore": ps, "updatedAt": now(),
+        }
         if existing:
-            new_freq = existing.get("frequency", 0) + p["frequency"]
-            src_ids = list(set(existing.get("sourceIds", []) + [source_id]))
-            await db.phrases().update_one(
-                {"_id": existing["_id"]},
-                {"$set": {"frequency": new_freq, "sourceIds": src_ids, "updatedAt": now()}},
-            )
-        else:
-            doc = {**p, "userId": user_id, "sourceIds": [source_id], "status": "new",
-                   "important": False, "hidden": False, "createdAt": now(), "updatedAt": now()}
+            await db.phrases().update_one({"_id": existing["_id"], "userId": user_id}, {"$set": fields})
+            continue
+        doc = {**p, **fields, "userId": user_id, "status": "new", "important": False, "hidden": False, "createdAt": now()}
+        try:
             await db.phrases().insert_one(doc)
             added += 1
+        except DuplicateKeyError:
+            existing = await db.phrases().find_one({"userId": user_id, "phrase": p["phrase"]})
+            if existing:
+                stats = apply_source_stats(existing, source_id, p.get("frequency") or 0)
+                fields["frequency"] = stats["frequency"]
+                fields["sourceFrequency"] = stats["sourceFrequency"]
+                fields["sourceIds"] = stats["sourceIds"]
+                await db.phrases().update_one({"_id": existing["_id"], "userId": user_id}, {"$set": fields})
     return added
 
 
@@ -400,24 +480,42 @@ async def _merge_patterns(user_id: str, source_id: str, patterns: list[dict]) ->
         existing = await db.patterns().find_one({"userId": user_id, "sentence": p["sentence"]})
         if existing:
             await db.patterns().update_one(
-                {"_id": existing["_id"]},
+                {"_id": existing["_id"], "userId": user_id},
                 {"$addToSet": {"sourceIds": source_id}, "$set": {"updatedAt": now()}},
             )
-        else:
-            doc = {**p, "userId": user_id, "sourceIds": [source_id], "status": "new",
-                   "important": False, "hidden": False, "createdAt": now(), "updatedAt": now()}
+            continue
+        doc = {**p, "userId": user_id, "sourceIds": [source_id], "status": "new",
+               "important": False, "hidden": False, "createdAt": now(), "updatedAt": now()}
+        try:
             await db.patterns().insert_one(doc)
             added += 1
+        except DuplicateKeyError:
+            await db.patterns().update_one(
+                {"userId": user_id, "sentence": p["sentence"]},
+                {"$addToSet": {"sourceIds": source_id}, "$set": {"updatedAt": now()}},
+            )
     return added
 
 
-async def _enrich_top(user_id: str, source_id: str, job_id: str) -> None:
+async def _user_provider(user_id: str) -> str:
+    if not is_oid(user_id):
+        return settings.ai_provider
+    user = await db.users().find_one({"_id": oid(user_id)}, {"settings.aiProvider": 1})
+    choice = ((user or {}).get("settings") or {}).get("aiProvider")
+    return choice or settings.ai_provider
+
+
+async def _enrich_top(user_id: str, source_id: str, job_id: str, provider_name: str) -> None:
     cur = db.vocab().find(
         {"userId": user_id, "sourceIds": source_id, "aiEnriched": False}
     ).sort("priorityScore", -1).limit(AI_ENRICH_TOP_WORDS)
     async for w in cur:
-        data = await ai.explain_word(w["word"], w.get("partOfSpeech", ""),
-                                     (w.get("examples") or [""])[0])
+        if not await consume_ai_call(user_id, settings.max_ai_calls_per_day):
+            await _log(job_id, "Daily AI quota reached")
+            return
+        data = await ai.explain_word(
+            w["word"], w.get("partOfSpeech", ""), (w.get("examples") or [""])[0], provider_name,
+        )
         update = {"aiEnriched": True, "updatedAt": now()}
         for key in ("persianMeaning", "simpleEnglishMeaning", "difficulty",
                     "ieltsUseCases", "commonMistakes"):
@@ -436,7 +534,10 @@ async def _enrich_top(user_id: str, source_id: str, job_id: str) -> None:
         {"userId": user_id, "sourceIds": source_id, "aiEnriched": False}
     ).sort("priorityScore", -1).limit(AI_ENRICH_TOP_PHRASES)
     async for p in cur:
-        data = await ai.explain_phrase(p["phrase"], (p.get("examples") or [""])[0])
+        if not await consume_ai_call(user_id, settings.max_ai_calls_per_day):
+            await _log(job_id, "Daily AI quota reached")
+            return
+        data = await ai.explain_phrase(p["phrase"], (p.get("examples") or [""])[0], provider_name)
         update = {"aiEnriched": True, "updatedAt": now()}
         for key in ("persianMeaning", "simpleEnglishMeaning", "notes"):
             if data.get(key):
@@ -449,7 +550,10 @@ async def _enrich_top(user_id: str, source_id: str, job_id: str) -> None:
         {"userId": user_id, "sourceIds": source_id, "aiEnriched": False}
     ).sort("priorityScore", -1).limit(AI_ENRICH_TOP_PATTERNS)
     async for pat in cur:
-        data = await ai.classify_pattern(pat["sentence"])
+        if not await consume_ai_call(user_id, settings.max_ai_calls_per_day):
+            await _log(job_id, "Daily AI quota reached")
+            return
+        data = await ai.classify_pattern(pat["sentence"], provider_name)
         update = {"aiEnriched": True, "updatedAt": now()}
         for key in ("category", "template", "notes"):
             if data.get(key):

@@ -111,7 +111,7 @@ def parse_pdf_document(
     min_chars = settings.ocr_min_chars_per_page if min_chars is None else min_chars
     language = settings.ocr_language if language is None else language
     if max_pages is None:
-        max_pages = settings.ocr_max_pages  # 0 / None => all pages
+        max_pages = settings.effective_page_cap()
 
     scale = max(0.5, dpi / 72.0)
     pages: list[ParsedPage] = []
@@ -254,23 +254,31 @@ def _flatten_json(data) -> str:
     return "\n".join(out)
 
 
-async def parse_url(url: str) -> tuple[str, str]:
-    """Fetch a URL and return (title, text)."""
-    import httpx
+def _html_to_text(data: bytes, fallback_title: str) -> tuple[str, str]:
     from bs4 import BeautifulSoup
 
-    headers = {"User-Agent": "Mozilla/5.0 (IELTS-AI-Mastery; +local)"}
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        html = resp.text
-    # Use lxml if installed (faster), else the stdlib html.parser.
+    html = data.decode("utf-8", errors="ignore")
     try:
         soup = BeautifulSoup(html, "lxml")
     except Exception:
         soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
         tag.decompose()
-    title = (soup.title.string.strip() if soup.title and soup.title.string else url)
+    title = (soup.title.string.strip() if soup.title and soup.title.string else fallback_title)
     text = "\n".join(line.strip() for line in soup.get_text("\n").splitlines() if line.strip())
     return title, text
+
+
+async def parse_url(url: str) -> tuple[str, str]:
+    """Fetch a public URL and return (title, text). Private targets are rejected."""
+    import asyncio
+
+    from url_guard import fetch_public_bytes, httpx_opener
+
+    async def opener(target: str):
+        return await httpx_opener(target, max_bytes=settings.max_url_bytes)
+
+    final_url, body = await fetch_public_bytes(
+        url, opener=opener, max_bytes=settings.max_url_bytes,
+    )
+    return await asyncio.to_thread(_html_to_text, body, final_url)

@@ -12,7 +12,9 @@ GRADE_QUALITY = {"again": 1, "hard": 3, "good": 4, "easy": 5}
 
 
 def review(card: dict, grade: str) -> dict:
-    quality = GRADE_QUALITY.get(grade, 4)
+    if grade not in GRADE_QUALITY:
+        raise ValueError("invalid grade")
+    quality = GRADE_QUALITY[grade]
     ease = card.get("easeFactor", 2.5)
     reps = card.get("repetitions", 0)
     interval = card.get("interval", 0)

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     mongodb_db: str = "ielts_ai_mastery"
 
     # Auth
+    app_env: str = "development"  # production | prod refuses the default JWT secret
     jwt_secret: str = "dev-insecure-secret-change-me"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 10080  # 7 days
@@ -30,12 +31,12 @@ class Settings(BaseSettings):
     ocr_dpi: int = 200
     ocr_min_chars_per_page: int = 80
     ocr_language: str = "eng"
-    ocr_max_pages: int = 0  # 0 / empty => process all pages
+    ocr_max_pages: int = 0  # 0 => use max_pdf_pages, never "unlimited"
 
     @field_validator("ocr_max_pages", mode="before")
     @classmethod
     def _empty_max_pages_is_zero(cls, v):
-        # OCR_MAX_PAGES= (empty string) should mean "all pages".
+        # OCR_MAX_PAGES= (empty string) uses the hard page cap.
         if v is None or (isinstance(v, str) and not v.strip()):
             return 0
         return v
@@ -55,8 +56,26 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = ""
     aws_region: str = "eu-central-1"
     aws_s3_bucket: str = ""
-    aws_s3_public_base_url: str = ""  # e.g. CloudFront URL; optional
+    # Ignored for downloads. Unsigned stable URLs are not returned to clients.
+    aws_s3_public_base_url: str = ""
     s3_presign_expiry: int = 3600  # seconds
+
+    # Abuse caps. Registration stays open; these keep one account from draining
+    # the shared AI key and object store. Override with env vars if needed.
+    max_upload_bytes: int = 25 * 1024 * 1024
+    max_paste_chars: int = 500_000
+    max_pdf_pages: int = 80
+    max_url_bytes: int = 1_500_000
+    max_page_chars: int = 200_000
+    max_concurrent_jobs: int = 2
+    job_timeout_seconds: int = 15 * 60
+    max_sources_per_user: int = 200
+    max_storage_bytes_per_user: int = 500 * 1024 * 1024
+    max_active_jobs_per_user: int = 3
+    max_ai_calls_per_day: int = 40
+    rate_register_per_hour: int = 8
+    rate_login_per_hour: int = 20
+    rate_import_per_hour: int = 30
 
     # URL prefix when the reverse proxy forwards /api/* without stripping (Dokploy).
     # Local dev: leave empty. Production: API_ROOT_PREFIX=/api
@@ -85,6 +104,31 @@ class Settings(BaseSettings):
     @property
     def s3_enabled(self) -> bool:
         return bool(self.aws_access_key_id and self.aws_secret_access_key and self.aws_s3_bucket)
+
+    @property
+    def local_dev(self) -> bool:
+        from security_policy import is_local_context
+
+        return is_local_context(
+            app_env=self.app_env,
+            api_prefix=self.api_prefix,
+            cors_origins=self.cors_origins_list,
+        )
+
+    @property
+    def allow_local_storage(self) -> bool:
+        return self.local_dev
+
+    @property
+    def trust_proxy(self) -> bool:
+        return not self.local_dev
+
+    def effective_page_cap(self) -> int:
+        hard = max(1, int(self.max_pdf_pages))
+        soft = int(self.ocr_max_pages or 0)
+        if soft > 0:
+            return max(1, min(soft, hard))
+        return hard
 
 
 @lru_cache

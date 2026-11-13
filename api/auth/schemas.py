@@ -1,5 +1,12 @@
 """Pydantic schemas for auth and users."""
-from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+
+FocusModule = Literal["Academic", "General", "Writing", "Speaking", "Reading", "Listening"]
+AiProviderName = Literal["openai", "anthropic", "ollama"]
 
 
 class RegisterRequest(BaseModel):
@@ -10,7 +17,12 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
+
+
+class PasswordChange(BaseModel):
+    currentPassword: str = Field(min_length=1, max_length=128)
+    newPassword: str = Field(min_length=6, max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -20,11 +32,32 @@ class TokenResponse(BaseModel):
 
 
 class UserSettings(BaseModel):
-    aiProvider: str = "openai"
-    dailyTarget: int = 30
-    targetBand: float = 7.5
+    aiProvider: AiProviderName = "openai"
+    dailyTarget: int = Field(default=30, ge=5, le=200)
+    targetBand: float = Field(default=7.5, ge=4, le=9)
     examDate: str | None = None
-    focusModules: list[str] = Field(default_factory=lambda: ["Academic", "Writing", "Speaking"])
+    focusModules: list[FocusModule] = Field(
+        default_factory=lambda: ["Academic", "Writing", "Speaking"],
+        max_length=6,
+    )
+
+    @field_validator("examDate")
+    @classmethod
+    def _exam_date(cls, value: str | None) -> str | None:
+        if value is None or str(value).strip() == "":
+            return None
+        text = str(value).strip()
+        datetime.strptime(text, "%Y-%m-%d")
+        return text
+
+    @field_validator("focusModules")
+    @classmethod
+    def _unique_modules(cls, value: list[str]) -> list[str]:
+        seen: list[str] = []
+        for item in value:
+            if item not in seen:
+                seen.append(item)
+        return seen
 
 
 class UserPublic(BaseModel):

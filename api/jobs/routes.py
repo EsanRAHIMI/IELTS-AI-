@@ -1,5 +1,5 @@
 """Job status endpoints."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 import database as db
 from auth.dependencies import current_user_id
@@ -13,7 +13,7 @@ _ACTIVE = {JOB_PENDING, JOB_PROCESSING}
 
 
 @router.get("")
-async def list_jobs(uid: str = Depends(current_user_id), limit: int = 25):
+async def list_jobs(uid: str = Depends(current_user_id), limit: int = Query(25, ge=1, le=100)):
     cur = db.jobs().find({"userId": uid}).sort("createdAt", -1).limit(limit)
     return {"items": [serialize(d) async for d in cur]}
 
@@ -21,7 +21,7 @@ async def list_jobs(uid: str = Depends(current_user_id), limit: int = 25):
 @router.get("/active")
 async def active_jobs(uid: str = Depends(current_user_id)):
     """Jobs still running — used by the Import page after refresh/return."""
-    cur = db.jobs().find({"userId": uid, "status": {"$in": list(_ACTIVE)}}).sort("updatedAt", -1)
+    cur = db.jobs().find({"userId": uid, "status": {"$in": list(_ACTIVE)}}).sort("updatedAt", -1).limit(50)
     items = []
     async for doc in cur:
         row = serialize(doc)

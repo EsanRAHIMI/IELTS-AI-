@@ -78,23 +78,49 @@ def jobs():
     return col("jobs")
 
 
+async def _ensure_index(collection, keys, **kwargs) -> None:
+    """Create an index. If a unique index cannot be built, keep a non-unique one."""
+    try:
+        await collection.create_index(keys, **kwargs)
+    except Exception as exc:
+        if not kwargs.get("unique"):
+            logger.warning("Index %s failed: %s", keys, exc)
+            return
+        logger.warning("Unique index %s failed (%s); creating a non-unique index", keys, exc)
+        plain = {k: v for k, v in kwargs.items() if k != "unique"}
+        plain["name"] = str(plain.get("name") or "idx") + "_plain"
+        try:
+            await collection.create_index(keys, **plain)
+        except Exception as inner:
+            logger.warning("Fallback index %s failed: %s", keys, inner)
+
+
 async def init_indexes() -> None:
     """Create indexes used across the app. Safe to call repeatedly."""
     try:
-        await users().create_index("email", unique=True)
+        await _ensure_index(users(), "email", unique=True, name="email_unique")
         for c in (vocab(), phrases(), patterns()):
-            await c.create_index([("userId", 1), ("priorityScore", -1)])
-            await c.create_index([("userId", 1), ("status", 1)])
-        await vocab().create_index([("userId", 1), ("lemma", 1)])
-        await cards().create_index([("userId", 1), ("nextReviewAt", 1)])
-        await cards().create_index([("userId", 1), ("status", 1)])
-        await sources().create_index([("userId", 1), ("createdAt", -1)])
-        await source_chunks().create_index([("sourceId", 1), ("index", 1)])
-        await source_chunks().create_index([("userId", 1)])
-        await source_pages().create_index([("sourceId", 1), ("pageNumber", 1)])
-        await source_pages().create_index([("userId", 1)])
-        await jobs().create_index([("status", 1), ("createdAt", 1)])
-        await reviews().create_index([("userId", 1), ("reviewedAt", -1)])
+            await _ensure_index(c, [("userId", 1), ("priorityScore", -1)])
+            await _ensure_index(c, [("userId", 1), ("status", 1)])
+        await _ensure_index(vocab(), [("userId", 1), ("lemma", 1)], unique=True, name="user_lemma_unique")
+        await _ensure_index(phrases(), [("userId", 1), ("phrase", 1)], unique=True, name="user_phrase_unique")
+        await _ensure_index(patterns(), [("userId", 1), ("sentence", 1)], unique=True, name="user_sentence_unique")
+        await _ensure_index(cards(), [("userId", 1), ("nextReviewAt", 1)])
+        await _ensure_index(cards(), [("userId", 1), ("status", 1)])
+        await _ensure_index(
+            cards(), [("userId", 1), ("type", 1), ("refId", 1)], unique=True, name="user_card_ref_unique",
+        )
+        await _ensure_index(sources(), [("userId", 1), ("createdAt", -1)])
+        await _ensure_index(source_chunks(), [("sourceId", 1), ("index", 1)])
+        await _ensure_index(source_chunks(), [("userId", 1)])
+        await _ensure_index(source_pages(), [("sourceId", 1), ("pageNumber", 1)])
+        await _ensure_index(source_pages(), [("userId", 1)])
+        await _ensure_index(jobs(), [("status", 1), ("createdAt", 1)])
+        await _ensure_index(jobs(), [("userId", 1), ("createdAt", -1)])
+        await _ensure_index(jobs(), [("userId", 1), ("status", 1)])
+        await _ensure_index(reviews(), [("userId", 1), ("reviewedAt", -1)])
+        await _ensure_index(col("rate_buckets"), "expiresAt", expireAfterSeconds=0, name="rate_ttl")
+        await _ensure_index(col("usage_daily"), "expiresAt", expireAfterSeconds=0, name="usage_ttl")
         logger.info("Mongo indexes ensured")
     except Exception as exc:  # pragma: no cover - startup resilience
         logger.warning("Could not ensure indexes: %s", exc)

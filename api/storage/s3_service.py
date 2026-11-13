@@ -46,28 +46,32 @@ def build_user_source_key(user_id: str, source_id: str, filename: str, prefix: s
 
 
 # --- Core operations --------------------------------------------------------
+class StorageUnavailable(RuntimeError):
+    """Raised when production has no object store. The message is not client-facing."""
+
+
 def upload_file_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> dict:
-    """Upload raw bytes to S3 (or local fallback). Returns storage metadata."""
+    """Upload raw bytes to S3 (or a local dev fallback). Never returns a public URL."""
     if enabled():
         _get_client().put_object(
             Bucket=settings.aws_s3_bucket, Key=key, Body=data, ContentType=content_type
         )
-        logger.info("Uploaded %d bytes to s3://%s/%s", len(data), settings.aws_s3_bucket, key)
+        logger.info("Uploaded %d bytes to object storage", len(data))
         return {
             "storage": "s3",
             "bucket": settings.aws_s3_bucket,
             "key": key,
-            "url": public_url(key),
             "sizeBytes": len(data),
             "mimeType": content_type,
         }
-    # Local fallback (dev only)
+    if not settings.allow_local_storage:
+        raise StorageUnavailable("Object storage is not configured")
     path = _local_path(key)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
         f.write(data)
-    logger.warning("S3 not configured; stored locally at %s", path)
-    return {"storage": "local", "bucket": "", "key": key, "url": "", "sizeBytes": len(data), "mimeType": content_type}
+    logger.warning("S3 not configured; stored locally for development")
+    return {"storage": "local", "bucket": "", "key": key, "sizeBytes": len(data), "mimeType": content_type}
 
 
 def upload_file_path(key: str, path: str, content_type: str = "application/octet-stream") -> dict:
@@ -119,35 +123,35 @@ def delete_object(key: str) -> bool:
 
 
 def get_presigned_url(key: str, expires: int | None = None, download_name: str | None = None) -> str | None:
-    """Return a time-limited URL to fetch the object directly."""
-    if not key:
+    """Return a time-limited URL. There is no unsigned fallback."""
+    if not key or not enabled():
         return None
-    if enabled():
-        params = {"Bucket": settings.aws_s3_bucket, "Key": key}
-        if download_name:
-            params["ResponseContentDisposition"] = f'attachment; filename="{download_name}"'
-        try:
-            return _get_client().generate_presigned_url(
-                "get_object", Params=params, ExpiresIn=expires or settings.s3_presign_expiry
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Presign failed for %s: %s", key, exc)
-            return None
-    return None  # no public URL for local fallback
+    from http_util import content_disposition
+
+    params = {"Bucket": settings.aws_s3_bucket, "Key": key}
+    if download_name:
+        params["ResponseContentDisposition"] = content_disposition(download_name)
+    try:
+        return _get_client().generate_presigned_url(
+            "get_object", Params=params, ExpiresIn=expires or settings.s3_presign_expiry
+        )
+    except Exception:
+        logger.warning("Presign failed")
+        return None
 
 
 def public_url(key: str) -> str:
-    base = settings.aws_s3_public_base_url.rstrip("/")
-    if base:
-        return f"{base}/{key}"
-    if enabled():
-        return f"https://{settings.aws_s3_bucket}.s3.{settings.aws_region}.amazonaws.com/{key}"
+    """Stable object URLs are not published. Downloads use a presigned URL."""
     return ""
 
 
 def _local_path(key: str) -> str:
-    # Mirror the S3 key layout under the temp dir for the dev fallback.
-    return os.path.join(settings.upload_dir, "s3-fallback", key)
+    """Mirror the object key under the temp dir. Reject paths that escape it."""
+    root = os.path.abspath(os.path.join(settings.upload_dir, "s3-fallback"))
+    path = os.path.abspath(os.path.join(root, key))
+    if os.path.commonpath([root, path]) != root:
+        raise ValueError("invalid storage key")
+    return path
 
 
 def random_suffix() -> str:

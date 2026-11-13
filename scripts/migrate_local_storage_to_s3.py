@@ -60,8 +60,8 @@ async def migrate(delete_local: bool) -> None:
             {"_id": src["_id"]},
             {"$set": {
                 "storage": "s3", "s3Bucket": meta["bucket"], "s3Key": meta["key"],
-                "s3Url": meta.get("url", ""), "fileKind": ext, "updatedAt": now(),
-            }, "$unset": {"filePath": ""}},
+                "fileKind": ext, "updatedAt": now(),
+            }, "$unset": {"filePath": "", "s3Url": ""}},
         )
         print(f"  [ok]   source {sid} -> s3://{meta['bucket']}/{meta['key']}")
         migrated += 1

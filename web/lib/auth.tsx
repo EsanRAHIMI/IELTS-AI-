@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { api, setToken, getToken } from "./api";
+import { clearApiCaches } from "./pwa";
 import type { User } from "@/types";
 
 interface AuthState {
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refresh();
+    void clearApiCaches();
   }, [refresh]);
 
   const login = async (email: string, password: string) => {
@@ -60,9 +62,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    setToken(null);
-    setUser(null);
-    if (typeof window !== "undefined") window.location.href = "/";
+    void (async () => {
+      try {
+        if (getToken()) await api("/auth/logout", { method: "POST" });
+      } catch {
+        /* local logout still proceeds */
+      }
+      await clearApiCaches();
+      setToken(null);
+      setUser(null);
+      if (typeof window !== "undefined") window.location.href = "/";
+    })();
   };
 
   return (

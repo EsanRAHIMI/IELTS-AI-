@@ -7,9 +7,10 @@ target user, then auto-builds flashcards for the highest-priority items.
 Usage:
     cd api && source .venv/bin/activate
     cd ..
-    python scripts/seed_ielts_data.py --email you@example.com [--password secret] [--reset]
+    python scripts/seed_ielts_data.py --email you@example.com --password 'a-long-unique-password' [--reset]
 
-If the user does not exist it is created (default password: changeme123).
+If the user does not exist it is created with the password you pass.
+Do not use a shared default password.
 Run this AFTER configuring api/.env with MONGODB_URI.
 """
 from __future__ import annotations
@@ -119,7 +120,7 @@ async def get_or_create_user(email: str, password: str) -> str:
                      "examDate": None, "focusModules": ["Academic", "Writing", "Speaking"]},
         "createdAt": now(), "updatedAt": now(),
     })
-    print(f"  Created user {email} (password: {password})")
+    print(f"  Created user {email}")
     return str(res.inserted_id)
 
 
@@ -202,7 +203,7 @@ async def seed(email: str, password: str, reset: bool) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Seed IELTS starter data")
     parser.add_argument("--email", required=True, help="target user email")
-    parser.add_argument("--password", default="changeme123", help="password if user is created")
+    parser.add_argument("--password", required=True, help="password used only when the user is created")
     parser.add_argument("--reset", action="store_true", help="remove existing seed data first")
     args = parser.parse_args()
     asyncio.run(seed(args.email, args.password, args.reset))
