@@ -14,6 +14,19 @@ import { WorkStatus, useWorkNotice, workError } from "@/components/ui/work-statu
 
 const MODULES = ["Academic", "General", "Writing", "Speaking", "Reading", "Listening"];
 const PROVIDERS = ["openai", "anthropic", "ollama"];
+const LANGUAGES = [
+  ["fa", "Persian"],
+  ["ar", "Arabic"],
+  ["tr", "Turkish"],
+  ["ur", "Urdu"],
+  ["hi", "Hindi"],
+  ["zh", "Chinese"],
+  ["es", "Spanish"],
+  ["fr", "French"],
+  ["de", "German"],
+  ["ru", "Russian"],
+  ["en", "English"],
+];
 
 export default function SettingsPage() {
   const { user, setUser } = useAuth();
@@ -23,6 +36,7 @@ export default function SettingsPage() {
   const [targetBand, setTargetBand] = useState(7.5);
   const [examDate, setExamDate] = useState("");
   const [focusModules, setFocusModules] = useState<string[]>([]);
+  const [translationLanguage, setTranslationLanguage] = useState("fa");
   const [health, setHealth] = useState<{ aiConfigured: boolean; aiProvider: string; db: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,6 +48,7 @@ export default function SettingsPage() {
       setTargetBand(s.targetBand);
       setExamDate(s.examDate || "");
       setFocusModules(s.focusModules || []);
+      setTranslationLanguage(s.translationLanguage || "fa");
     }
   }, [user]);
 
@@ -51,7 +66,7 @@ export default function SettingsPage() {
     try {
       const updated = await api<User>("/auth/me/settings", {
         method: "PUT",
-        body: { aiProvider, dailyTarget: Number(dailyTarget), targetBand: Number(targetBand), examDate: examDate || null, focusModules },
+        body: { aiProvider, dailyTarget: Number(dailyTarget), targetBand: Number(targetBand), examDate: examDate || null, focusModules, translationLanguage },
       });
       setUser(updated);
       setNotice({ phase: "success", title: "Settings saved" });
@@ -99,6 +114,13 @@ export default function SettingsPage() {
           <div className="space-y-1.5">
             <Label>Exam date</Label>
             <Input type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-3">
+            <Label>Translation language</Label>
+            <Select value={translationLanguage} onChange={(e) => setTranslationLanguage(e.target.value)}>
+              {LANGUAGES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+            </Select>
+            <p className="text-xs text-muted-foreground">Study Mode translates a revealed card into this language.</p>
           </div>
         </CardContent>
       </Card>
