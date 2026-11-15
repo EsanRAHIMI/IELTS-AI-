@@ -79,4 +79,59 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
   return (await res.json()) as T;
 }
 
+function errorFromBody(status: number, statusText: string, data: unknown): ApiError {
+  let detail: unknown = statusText || "Upload failed";
+  let message = statusText || "Upload failed";
+  if (data && typeof data === "object") {
+    const record = data as { detail?: unknown; message?: unknown };
+    detail = record.detail ?? record.message ?? detail;
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (Array.isArray(detail)) {
+      message = detail.map((e: { msg?: string }) => e.msg).filter(Boolean).join(" ") || message;
+    }
+  }
+  return new ApiError(message, status, detail);
+}
+
+/** POST multipart data and report browser upload percent (0–100). */
+export function uploadWithProgress<T = any>(
+  path: string,
+  formData: FormData,
+  onProgress: (percent: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", BASE + path);
+    const token = getToken();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (ev) => {
+      if (!ev.lengthComputable || ev.total <= 0) return;
+      onProgress(Math.min(100, Math.round((ev.loaded / ev.total) * 100)));
+    };
+    xhr.onload = () => {
+      let data: unknown;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : undefined;
+      } catch {
+        data = undefined;
+      }
+      if (xhr.status === 401 && typeof window !== "undefined") {
+        setToken(null);
+        if (!window.location.pathname.startsWith("/login") && window.location.pathname !== "/") {
+          window.location.href = "/";
+        }
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as T);
+        return;
+      }
+      reject(errorFromBody(xhr.status, xhr.statusText, data));
+    };
+    xhr.onerror = () => reject(new ApiError("Upload failed", 0));
+    xhr.onabort = () => reject(new ApiError("Upload failed", 0));
+    xhr.send(formData);
+  });
+}
+
 export const BASE_URL = BASE;

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
-import { UploadCloud, Link2, FileText, RefreshCw, Trash2, Loader2, CheckCircle2, AlertCircle, AlertTriangle, ScanLine, Layers, Download, Eye, Square } from "lucide-react";
-import { api, BASE_URL, getToken } from "@/lib/api";
+import { UploadCloud, Link2, FileText, RefreshCw, Trash2, CheckCircle2, AlertCircle, AlertTriangle, ScanLine, Layers, Download, Eye, Square } from "lucide-react";
+import { api, BASE_URL, getToken, uploadWithProgress } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import type { Source, Job, SourceDeleteImpact } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { WorkStatus, workError, type WorkNotice } from "@/components/ui/work-status";
+import { Progress } from "@/components/ui/progress";
 
 async function openDownload(id: string) {
   const res = await api<{ url: string; authenticated?: boolean }>(`/sources/${id}/download-url`);
@@ -49,6 +50,7 @@ export default function ImportPage() {
   const [reprocessId, setReprocessId] = useState<string | null>(null);
   const [notice, setNotice] = useState<WorkNotice & { sourceId?: string } | null>(null);
   const [uploadName, setUploadName] = useState<string | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
 
   async function download(id: string) {
     setNotice({ phase: "progress", title: "Preparing the original file" });
@@ -137,17 +139,12 @@ export default function ImportPage() {
   async function submitFile(file: File) {
     setTask("file");
     setUploadName(file.name);
-    setNotice({ phase: "progress", title: `Uploading ${file.name}`, detail: "Stay on this page until the file is stored." });
+    setUploadPercent(0);
+    setNotice(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`${BASE_URL}/sources/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${getToken()}` },
-        body: fd,
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || "Upload failed");
+      const body = await uploadWithProgress<{ id: string }>("/sources/upload", fd, setUploadPercent);
       setNotice({
         phase: "progress",
         title: `Processing ${file.name}`,
@@ -158,7 +155,12 @@ export default function ImportPage() {
       reloadJobs();
     } catch (e: unknown) {
       setNotice({ phase: "error", title: `Upload failed · ${file.name}`, detail: workError(e) });
-    } finally { setTask(null); setUploadName(null); if (fileRef.current) fileRef.current.value = ""; }
+    } finally {
+      setTask(null);
+      setUploadName(null);
+      setUploadPercent(null);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   async function reprocess(id: string, resetExtractedData = false) {
@@ -207,25 +209,14 @@ export default function ImportPage() {
 
             <TabsContent value="file">
               <div
-                className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 text-center transition-colors ${busy && uploadName ? "border-accent bg-accent/5" : "cursor-pointer hover:border-primary"}`}
+                className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 text-center transition-colors ${busy ? "pointer-events-none opacity-60" : "cursor-pointer hover:border-primary"}`}
                 onClick={() => { if (!busy) fileRef.current?.click(); }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); if (!busy && e.dataTransfer.files[0]) submitFile(e.dataTransfer.files[0]); }}
-                aria-busy={!!(busy && uploadName)}
               >
-                {busy && uploadName ? (
-                  <>
-                    <Loader2 className="h-10 w-10 animate-spin text-accent" />
-                    <p className="font-medium">Uploading {uploadName}</p>
-                    <p className="text-sm text-muted-foreground">Keep this page open until the file is stored.</p>
-                  </>
-                ) : (
-                  <>
                 <UploadCloud className="h-10 w-10 text-muted-foreground" />
                 <p className="font-medium">Drop a file or click to browse</p>
                 <p className="text-sm text-muted-foreground">PDF, DOCX, TXT, CSV, JSON</p>
-                  </>
-                )}
                 <input
                   ref={fileRef}
                   type="file"
@@ -260,7 +251,20 @@ export default function ImportPage() {
               </div>
             </TabsContent>
           </Tabs>
-          {notice && (
+          {uploadPercent !== null && uploadName ? (
+            <div
+              className="mt-4 space-y-2 rounded-lg border border-border bg-secondary/40 p-3"
+              role="progressbar"
+              aria-valuenow={uploadPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Uploading ${uploadName}`}
+            >
+              <p className="text-sm font-medium">Uploading {uploadName}</p>
+              <Progress value={uploadPercent} indicatorClassName="duration-150" />
+              <p className="text-sm tabular-nums text-muted-foreground">{uploadPercent}%</p>
+            </div>
+          ) : notice ? (
             <WorkStatus
               className="mt-4"
               phase={notice.phase}
@@ -268,7 +272,7 @@ export default function ImportPage() {
               detail={notice.detail}
               onDismiss={() => setNotice(null)}
             />
-          )}
+          ) : null}
         </CardContent>
       </Card>
 

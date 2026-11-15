@@ -16,6 +16,7 @@ from url_guard import UrlRejected, validate_url_syntax
 from utils.serialization import now, oid, is_oid, serialize
 from jobs.processor import cancel_jobs_for_source, create_job, schedule_job
 from storage import s3_service
+from sources.limits import file_too_large_message
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 logger = logging.getLogger("ielts.sources")
@@ -91,17 +92,32 @@ def present_source(doc: dict, *, preview: bool) -> dict:
     return data
 
 
+# Stop counting a rejected upload after this so a huge body cannot be streamed forever.
+_UPLOAD_COUNT_CAP = 1024 * 1024 * 1024
+
+
 async def _read_limited(file: UploadFile) -> bytes:
+    limit = settings.max_upload_bytes
     chunks: list[bytes] = []
     size = 0
+    over = False
     while True:
         block = await file.read(1024 * 1024)
         if not block:
             break
         size += len(block)
-        if size > settings.max_upload_bytes:
-            raise HTTPException(413, "File is too large")
-        chunks.append(block)
+        if size > limit:
+            over = True
+            chunks.clear()
+        else:
+            chunks.append(block)
+        if over and size >= _UPLOAD_COUNT_CAP:
+            raise HTTPException(
+                413,
+                file_too_large_message(size, limit, at_least=True),
+            )
+    if over:
+        raise HTTPException(413, file_too_large_message(size, limit))
     return b"".join(chunks)
 
 
