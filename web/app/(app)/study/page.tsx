@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw, Keyboard, PartyPopper } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useSpeech } from "@/lib/speech";
 import type { Card as CardType } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ export default function StudyPage() {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewed, setReviewed] = useState(0);
+  const { enabled: speakOn, ready: speakReady, speak, stop } = useSpeech();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,6 +39,16 @@ export default function StudyPage() {
   useEffect(() => { load(); }, [load]);
 
   const current = queue[idx];
+
+  useEffect(() => {
+    if (!speakReady) return;
+    if (!speakOn || !current?.front) {
+      stop();
+      return;
+    }
+    speak(current.front);
+    return () => stop();
+  }, [speakReady, speakOn, current?.id, current?.front, speak, stop]);
   const done = !loading && (!current || idx >= queue.length);
 
   const grade = useCallback(
