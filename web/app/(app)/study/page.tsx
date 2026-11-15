@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { WorkStatus, workError, type WorkNotice } from "@/components/ui/work-status";
 
 const RTL = new Set(["fa", "ar", "ur"]);
 
@@ -60,6 +61,7 @@ export default function StudyPage() {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewed, setReviewed] = useState(0);
+  const [saveNotice, setSaveNotice] = useState<WorkNotice | null>(null);
   const [reviewError, setReviewError] = useState("");
   const [translating, setTranslating] = useState(false);
   const [translateError, setTranslateError] = useState("");
@@ -72,6 +74,7 @@ export default function StudyPage() {
     setRevealed(false);
     setReviewed(res.reviewedToday || 0);
     setReviewError("");
+    setSaveNotice(null);
     setLoading(false);
   }, []);
 
@@ -106,13 +109,17 @@ export default function StudyPage() {
       if (!current || grading.current) return;
       grading.current = true;
       setReviewError("");
+      setSaveNotice({ phase: "progress", title: "Saving your answer" });
       try {
         await api(`/study/cards/${current.id}/review`, { method: "POST", body: { grade: g } });
       } catch (err) {
         grading.current = false;
-        setReviewError(err instanceof Error ? err.message : "Could not save this review");
+        const message = workError(err, "Could not save this review");
+        setReviewError(message);
+        setSaveNotice({ phase: "error", title: "Could not save this answer", detail: message });
         return;
       }
+      setSaveNotice({ phase: "success", title: "Answer saved" });
       setReviewed((r) => r + 1);
       setRevealed(false);
       setIdx((i) => i + 1);
@@ -295,6 +302,7 @@ export default function StudyPage() {
         </motion.div>
       </AnimatePresence>
 
+      {saveNotice && <WorkStatus phase={saveNotice.phase} title={saveNotice.title} detail={saveNotice.detail} onDismiss={() => setSaveNotice(null)} />}
       {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
       {revealed && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

@@ -10,26 +10,27 @@ import { cn, priorityColor } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/toast";
+import { WorkStatus, useWorkNotice } from "@/components/ui/work-status";
 
 export default function WordDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { toast } = useToast();
+  const { notice, run } = useWorkNotice();
   const { data: word, loading, reload } = useApiData<Word>(id ? `/vocabulary/${id}` : null);
   const [busy, setBusy] = useState(false);
 
   async function addToStudy() {
-    await api("/study/cards", { method: "POST", body: { type: "word", refId: id } });
-    toast({ title: "Added to flashcards", variant: "success" });
+    await run("Adding to study", async () => {
+      await api("/study/cards", { method: "POST", body: { type: "word", refId: id } });
+    }, "Added to study");
   }
   async function regenerate() {
     setBusy(true);
-    try {
+    await run("Regenerating the explanation", async () => {
       await api(`/vocabulary/${id}/regenerate`, { method: "POST" });
-      toast({ title: "Regenerated", variant: "success" });
       reload();
-    } finally { setBusy(false); }
+    }, "Explanation regenerated");
+    setBusy(false);
   }
 
   if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -49,6 +50,7 @@ export default function WordDetailPage() {
             </div>
             <span className={cn("mt-2 inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold", priorityColor(word.priorityScore))}>Priority {word.priorityScore} · freq {word.frequency}</span>
           </div>
+          {notice && <WorkStatus className="w-full sm:max-w-sm" phase={notice.phase} title={notice.title} detail={notice.detail} />}
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button onClick={addToStudy} className="h-10 flex-1 gap-2 sm:flex-none"><Plus className="h-4 w-4" /> Study</Button>
             <Button variant="outline" onClick={regenerate} disabled={busy} className="h-10 flex-1 gap-2 sm:flex-none"><RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Regenerate</Button>

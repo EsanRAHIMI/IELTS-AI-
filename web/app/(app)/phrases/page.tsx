@@ -12,12 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
-import { useToast } from "@/components/ui/toast";
+import { WorkStatus, useWorkNotice } from "@/components/ui/work-status";
 
 const SECTIONS = ["Writing Task 1", "Writing Task 2", "Reading", "Listening", "Speaking"];
 
 export default function PhrasesPage() {
-  const { toast } = useToast();
+  const { notice, run } = useWorkNotice();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [section, setSection] = useState("");
@@ -26,17 +26,20 @@ export default function PhrasesPage() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
   async function addToStudy(p: Phrase) {
-    await api("/study/cards", { method: "POST", body: { type: "phrase", refId: p.id } });
-    toast({ title: "Added to study", variant: "success" });
+    await run(`Adding “${p.phrase}” to study`, async () => {
+      await api("/study/cards", { method: "POST", body: { type: "phrase", refId: p.id } });
+    }, `Added “${p.phrase}” to study`);
   }
   async function regenerate(p: Phrase) {
-    await api(`/phrases/${p.id}/regenerate`, { method: "POST" });
-    toast({ title: "Regenerated", variant: "success" });
-    reload();
+    await run(`Regenerating “${p.phrase}”`, async () => {
+      await api(`/phrases/${p.id}/regenerate`, { method: "POST" });
+      reload();
+    }, `Regenerated “${p.phrase}”`);
   }
 
   return (
     <div className="page-stack">
+      {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
       <Card>
         <CardContent className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
           <div className="relative min-w-0">

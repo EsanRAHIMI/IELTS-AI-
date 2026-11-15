@@ -9,7 +9,7 @@ import { cn, priorityColor } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/toast";
+import { WorkStatus, useWorkNotice } from "@/components/ui/work-status";
 
 interface Plan {
   date: string;
@@ -25,12 +25,14 @@ interface Plan {
 }
 
 export default function DailyPlanPage() {
-  const { toast } = useToast();
+  const { notice, run } = useWorkNotice();
   const { data, loading } = useApiData<Plan>("/study/daily-plan");
 
   async function addAll(type: string, items: { id: string }[]) {
-    await Promise.all(items.map((i) => api("/study/cards", { method: "POST", body: { type, refId: i.id } }).catch(() => {})));
-    toast({ title: "Added to study", variant: "success" });
+    if (!items.length) return;
+    await run(`Adding ${items.length} item${items.length === 1 ? "" : "s"} to study`, async () => {
+      await Promise.all(items.map((i) => api("/study/cards", { method: "POST", body: { type, refId: i.id } })));
+    }, "Added to study");
   }
 
   if (loading) return <p className="text-sm text-muted-foreground">Building your plan…</p>;
@@ -38,6 +40,7 @@ export default function DailyPlanPage() {
 
   return (
     <div className="space-y-6">
+      {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="border-accent/40 bg-accent/5">
           <CardContent className="flex items-center gap-3 p-5">

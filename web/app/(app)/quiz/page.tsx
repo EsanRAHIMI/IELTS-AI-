@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WorkStatus, workError } from "@/components/ui/work-status";
 
 interface Question { id: string; prompt: string; options: string[]; correct: string; word: string; }
 
@@ -25,16 +26,27 @@ export default function QuizPage() {
   const [score, setScore] = useState(0);
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState<{ phase: "progress" | "success" | "error"; title: string; detail?: string } | null>(null);
 
   async function start(m: string) {
     setLoading(true);
-    setMessage("");
-    const res = await api<{ questions: Question[]; message?: string }>("/study/quiz", { query: { mode: m, count: 10 } });
-    setLoading(false);
-    if (!res.questions.length) { setMessage(res.message || "Not enough data to build a quiz."); setStarted(false); return; }
-    setQuestions(res.questions);
-    setIdx(0); setSelected(null); setScore(0); setStarted(true);
+    setNotice({ phase: "progress", title: "Building your quiz" });
+    try {
+      const res = await api<{ questions: Question[]; message?: string }>("/study/quiz", { query: { mode: m, count: 10 } });
+      if (!res.questions.length) {
+        setNotice({ phase: "error", title: "No quiz yet", detail: res.message || "Not enough vocabulary to build a quiz." });
+        setStarted(false);
+        return;
+      }
+      setQuestions(res.questions);
+      setIdx(0); setSelected(null); setScore(0); setStarted(true);
+      setNotice({ phase: "success", title: "Quiz ready", detail: `${res.questions.length} questions` });
+    } catch (err) {
+      setNotice({ phase: "error", title: "Could not start the quiz", detail: workError(err) });
+      setStarted(false);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function choose(opt: string) {
@@ -54,13 +66,12 @@ export default function QuizPage() {
           <Tabs value={mode} onValueChange={setMode} className="w-full">
             <TabsList>{MODES.map((m) => <TabsTrigger key={m.key} value={m.key}>{m.label}</TabsTrigger>)}</TabsList>
           </Tabs>
-          <Button className="w-full sm:w-auto sm:self-end" onClick={() => start(mode)} disabled={loading}>{loading ? "Loading…" : "New quiz"}</Button>
+          <Button className="w-full sm:w-auto sm:self-end" onClick={() => start(mode)} disabled={loading}>{loading ? "Building…" : "New quiz"}</Button>
+          {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} onDismiss={() => setNotice(null)} />}
         </CardContent>
       </Card>
 
-      {message && <Card><CardContent className="p-6 text-center text-muted-foreground">{message}</CardContent></Card>}
-
-      {!started && !message && (
+      {!started && !notice && (
         <Card><CardContent className="p-10 text-center text-muted-foreground">Choose a mode and start a quiz. Questions are generated from your enriched vocabulary.</CardContent></Card>
       )}
 
