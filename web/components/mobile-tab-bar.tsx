@@ -14,7 +14,7 @@ export function MobileTabBar() {
   const pathname = usePathname();
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none lg:hidden" aria-hidden={false}>
+    <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none" aria-hidden={false}>
       {/* Bottom scrim — dims content behind nav for legibility */}
       <div className="mobile-nav-scrim" aria-hidden="true" />
 
