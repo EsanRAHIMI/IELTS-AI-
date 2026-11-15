@@ -19,6 +19,26 @@ def today_key(user_id: str, day: str | None = None) -> str:
     return f"{user_id}:{stamp}"
 
 
+def session_without_card(card_ids: list | None, reviewed_ids: list | None, card_id: str) -> tuple[list[str], list[str]]:
+    """Drop a reported card from today's list and remember it so it cannot return."""
+    removed = str(card_id)
+    kept: list[str] = []
+    for item in card_ids or []:
+        sid = str(item)
+        if sid and sid != removed and sid not in kept:
+            kept.append(sid)
+    reviewed: list[str] = []
+    for item in list(reviewed_ids or []) + [removed]:
+        sid = str(item)
+        if sid and sid not in reviewed:
+            reviewed.append(sid)
+    return kept, reviewed
+
+
+def hidden_source(card: dict, hidden_refs: set[tuple[str, str]]) -> bool:
+    return (card.get("type"), str(card.get("refId") or "")) in hidden_refs
+
+
 def remaining_ids(card_ids: list | None, reviewed_ids: list | None) -> list[str]:
     reviewed = {str(item) for item in (reviewed_ids or [])}
     remaining: list[str] = []

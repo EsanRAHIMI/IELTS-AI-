@@ -13,7 +13,14 @@ from ai import service as ai
 from config import settings
 from quotas import consume_ai_call
 from study import sm2
-from study.day_progress import ensure_session, mark_reviewed, remaining_ids
+from study.day_progress import (
+    ensure_session,
+    hidden_source,
+    mark_reviewed,
+    remaining_ids,
+    session_without_card,
+    today_key,
+)
 from study.plan import focus_query, focus_skill_tokens, plan_sizes
 from study.translate import LANGUAGES, card_source_text, normalize_language, normalize_translation, stored_translation
 
@@ -72,7 +79,7 @@ async def add_card(body: AddCard, uid: str = Depends(current_user_id)):
         raise HTTPException(400, "Invalid refId")
     col = _TYPE_COL[body.type]()
     item = await col.find_one({"_id": oid(body.refId), "userId": uid})
-    if not item:
+    if not item or item.get("hidden"):
         raise HTTPException(404, "Item not found")
     existing = await db.cards().find_one({"userId": uid, "type": body.type, "refId": body.refId})
     if existing:
@@ -96,6 +103,23 @@ async def list_cards(
     return {"items": [serialize(d) async for d in cur]}
 
 
+async def _hidden_refs(uid: str, cards: list[dict]) -> set[tuple[str, str]]:
+    grouped: dict[str, list] = {}
+    for card in cards:
+        ref = str(card.get("refId") or "")
+        if card.get("type") in _TYPE_COL and is_oid(ref):
+            grouped.setdefault(card["type"], []).append(oid(ref))
+    hidden: set[tuple[str, str]] = set()
+    for item_type, ids in grouped.items():
+        cursor = _TYPE_COL[item_type]().find(
+            {"_id": {"$in": ids}, "userId": uid, "hidden": True},
+            {"_id": 1},
+        )
+        async for doc in cursor:
+            hidden.add((item_type, str(doc["_id"])))
+    return hidden
+
+
 async def _due_card_ids(uid: str, limit: int) -> list[str]:
     q = {"userId": uid, "nextReviewAt": {"$lte": now()}}
     cur = db.cards().find(q, {"_id": 1}).sort([("status", 1), ("nextReviewAt", 1)]).limit(limit)
@@ -115,7 +139,10 @@ async def review_queue(uid: str = Depends(current_user_id), limit: int = Query(4
     if ids:
         async for doc in db.cards().find({"_id": {"$in": ids}, "userId": uid}):
             found[str(doc["_id"])] = doc
-    items = [serialize(found[card_id]) for card_id in wanted if card_id in found]
+    loaded = [found[card_id] for card_id in wanted if card_id in found]
+    hidden = await _hidden_refs(uid, loaded)
+    visible = [card for card in loaded if not hidden_source(card, hidden)]
+    items = [serialize(card) for card in visible]
     return {
         "items": items,
         "totalDue": len(items),
@@ -149,6 +176,34 @@ async def review_card(card_id: str, body: ReviewBody, uid: str = Depends(current
         if col and is_oid(card.get("refId", "")):
             await col().update_one({"_id": oid(card["refId"])}, {"$set": {"status": "mastered"}})
     return {"ok": True, **{k: serialize(v) for k, v in update.items()}}
+
+
+@router.post("/cards/{card_id}/report")
+async def report_card(card_id: str, uid: str = Depends(current_user_id)):
+    """Remove a bad card from this user and keep it out of every later list."""
+    if not is_oid(card_id):
+        raise HTTPException(404, "Not found")
+    card = await db.cards().find_one({"_id": oid(card_id), "userId": uid})
+    if not card:
+        raise HTTPException(404, "Not found")
+    source = _TYPE_COL.get(card.get("type"))
+    ref = str(card.get("refId") or "")
+    if source and is_oid(ref):
+        await source().update_one(
+            {"_id": oid(ref), "userId": uid},
+            {"$set": {"hidden": True, "updatedAt": now()}},
+        )
+    await db.cards().delete_one({"_id": card["_id"], "userId": uid})
+    session = await db.study_progress().find_one({"_id": today_key(uid)})
+    if session:
+        card_ids, reviewed_ids = session_without_card(
+            session.get("cardIds"), session.get("reviewedIds"), card_id,
+        )
+        await db.study_progress().update_one(
+            {"_id": session["_id"]},
+            {"$set": {"cardIds": card_ids, "reviewedIds": reviewed_ids}},
+        )
+    return {"ok": True}
 
 
 @router.post("/cards/{card_id}/translate")

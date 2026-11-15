@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Languages, RotateCcw, Keyboard, PartyPopper } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Flag, Languages, RotateCcw, Keyboard, PartyPopper, Volume2 } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -67,6 +67,7 @@ export default function StudyPage() {
   const [grades, setGrades] = useState<Record<string, string>>({});
   const { enabled: speakOn, ready: speakReady, speak, stop } = useSpeech();
   const [toast, setToast] = useState<{ text: string; tone: "success" | "error" } | null>(null);
+  const [reporting, setReporting] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translateError, setTranslateError] = useState("");
   const toastTimer = useRef<number | null>(null);
@@ -89,10 +90,11 @@ export default function StudyPage() {
 
   useEffect(() => {
     if (!speakReady) return;
-    if (!speakOn || !current?.front) {
+    if (!speakOn) {
       stop();
       return;
     }
+    if (!current?.front) return;
     speak(current.front);
     return () => stop();
   }, [speakReady, speakOn, current?.id, current?.front, speak, stop]);
@@ -112,6 +114,30 @@ export default function StudyPage() {
   useEffect(() => () => {
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
   }, []);
+
+  const reportCard = useCallback(async () => {
+    if (!current || reporting) return;
+    const id = current.id;
+    const index = idx;
+    setReporting(true);
+    try {
+      await api(`/study/cards/${id}/report`, { method: "POST" });
+      setQueue((items) => items.filter((card) => card.id !== id));
+      setGrades((prev) => {
+        if (!prev[id]) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setReached((value) => (index < value ? Math.max(0, value - 1) : value));
+      setRevealed(false);
+      flash("Removed. This card will not be shown again.", "success");
+    } catch (err) {
+      flash(workError(err, "Could not remove this card"), "error");
+    } finally {
+      setReporting(false);
+    }
+  }, [current, flash, idx, reporting]);
 
   const translateCard = useCallback(async () => {
     if (!current || savedTranslation(current, language) || translating) return;
@@ -340,6 +366,31 @@ export default function StudyPage() {
             <CardContent className="flex min-h-[280px] flex-col items-center justify-center gap-4 p-5 text-center sm:min-h-[320px] sm:p-8">
               <Badge variant="secondary">{current.type.replace("_", " ")}</Badge>
               <p className="max-w-full break-words text-2xl font-bold sm:text-3xl">{current.front}</p>
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 px-2.5"
+                  data-pronounce=""
+                  aria-label={`Play pronunciation of ${current.front}`}
+                  onClick={() => speak(current.front, { force: true })}
+                >
+                  <Volume2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 px-2.5 text-muted-foreground"
+                  disabled={reporting}
+                  aria-label="Report and remove this card"
+                  onClick={reportCard}
+                >
+                  <Flag className="h-4 w-4" />
+                  {reporting ? "Removing…" : "Report"}
+                </Button>
+              </div>
 
               {revealed ? (
                 <div className="w-full space-y-3 border-t pt-4 text-left">
