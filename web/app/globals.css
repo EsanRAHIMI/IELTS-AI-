@@ -128,11 +128,6 @@
   .page-stack {
     @apply min-w-0 space-y-4;
   }
-  @media (min-width: 1024px) {
-    .pb-mobile-nav {
-      padding-bottom: 0;
-    }
-  }
 }
 
 /* Fallback when safe-area env is 0 in standalone PWA (some Android builds) */

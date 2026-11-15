@@ -1,15 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RotateCcw, Keyboard, PartyPopper } from "lucide-react";
+import { ArrowLeft, Languages, RotateCcw, Keyboard, PartyPopper } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { Card as CardType } from "@/types";
+import { useAuth } from "@/lib/auth";
+import type { Card as CardType, CardTranslation } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+
+const RTL = new Set(["fa", "ar", "ur"]);
+
+function savedTranslation(card: CardType, language: string): CardTranslation | null {
+  const saved = card.translations?.[language];
+  if (!saved) return null;
+  const pieces = [saved.front, saved.meaning, saved.notes, ...(saved.examples || []), ...(saved.collocations || [])];
+  return pieces.some((part) => (part || "").trim()) ? saved : null;
+}
 
 const GRADES = [
   { key: "again", label: "Again", hint: "1", cls: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
@@ -18,14 +28,41 @@ const GRADES = [
   { key: "easy", label: "Easy", hint: "4", cls: "bg-success text-success-foreground hover:bg-success/90" },
 ];
 
+const GRADE_BY_CODE: Record<string, string> = {
+  Digit1: "again", Numpad1: "again",
+  Digit2: "hard", Numpad2: "hard",
+  Digit3: "good", Numpad3: "good",
+  Digit4: "easy", Numpad4: "easy",
+};
+
+const GRADE_BY_KEY: Record<string, string> = {
+  "1": "again", "2": "hard", "3": "good", "4": "easy",
+  "۱": "again", "۲": "hard", "۳": "good", "۴": "easy",
+  "١": "again", "٢": "hard", "٣": "good", "٤": "easy",
+};
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+function gradeFromEvent(e: KeyboardEvent): string | null {
+  return GRADE_BY_CODE[e.code] || GRADE_BY_KEY[e.key] || null;
+}
+
 export default function StudyPage() {
+  const { user } = useAuth();
+  const language = user?.settings.translationLanguage || "fa";
   const [queue, setQueue] = useState<CardType[]>([]);
   const [idx, setIdx] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewed, setReviewed] = useState(0);
   const [reviewError, setReviewError] = useState("");
-  const grading = useRef(false);
+  const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,6 +79,27 @@ export default function StudyPage() {
 
   const current = queue[idx];
   const done = !loading && (!current || idx >= queue.length);
+  const translation = current ? savedTranslation(current, language) : null;
+  const canGoBack = idx > 0;
+  const grading = useRef(false);
+
+  const translateCard = useCallback(async () => {
+    if (!current || savedTranslation(current, language) || translating) return;
+    setTranslating(true);
+    setTranslateError("");
+    try {
+      const saved = await api<CardTranslation>(`/study/cards/${current.id}/translate`, { method: "POST" });
+      setQueue((items) => items.map((card) => (
+        card.id === current.id
+          ? { ...card, translations: { ...(card.translations || {}), [saved.language || language]: saved } }
+          : card
+      )));
+    } catch (err) {
+      setTranslateError(err instanceof Error ? err.message : "Translation failed");
+    } finally {
+      setTranslating(false);
+    }
+  }, [current, language, translating]);
 
   const grade = useCallback(
     async (g: string) => {
@@ -62,47 +120,124 @@ export default function StudyPage() {
     [current],
   );
 
-  useEffect(() => { grading.current = false; }, [idx]);
+  const goBack = useCallback(() => {
+    if (idx <= 0) return;
+    grading.current = false;
+    setRevealed(false);
+    setIdx((i) => i - 1);
+  }, [idx]);
+
+  useEffect(() => {
+    grading.current = false;
+  }, [idx]);
+
+  const keys = useRef({
+    loading, done, revealed, canGoBack,
+    reveal: () => setRevealed(true),
+    grade, goBack,
+  });
+  keys.current = { loading, done, revealed, canGoBack, reveal: () => setRevealed(true), grade, goBack };
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (done || loading) return;
-      if (e.code === "Space" || e.key === "Enter") { e.preventDefault(); if (!revealed) setRevealed(true); return; }
-      if (revealed) {
-        const map: Record<string, string> = { "1": "again", "2": "hard", "3": "good", "4": "easy" };
-        if (map[e.key]) grade(map[e.key]);
+      if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
+      if (isTypingTarget(e.target)) return;
+      const state = keys.current;
+      if (state.loading) return;
+      if (e.key === "ArrowLeft") {
+        if (!state.canGoBack) return;
+        e.preventDefault();
+        state.goBack();
+        return;
       }
+      if (state.done) return;
+      if (e.code === "Space" || e.key === "Enter") {
+        e.preventDefault();
+        if (!state.revealed) state.reveal();
+        return;
+      }
+      if (!state.revealed || e.repeat) return;
+      const choice = gradeFromEvent(e);
+      if (!choice) return;
+      e.preventDefault();
+      state.grade(choice);
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [revealed, grade, done, loading]);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  function onPointerDown(e: PointerEvent) {
+    if (e.button !== 0) return;
+    swipe.current = { x: e.clientX, y: e.clientY };
+  }
+  function onPointerUp(e: PointerEvent) {
+    if (!swipe.current) return;
+    const dx = e.clientX - swipe.current.x;
+    const dy = e.clientY - swipe.current.y;
+    swipe.current = null;
+    if (dx > 72 && Math.abs(dx) > Math.abs(dy)) goBack();
+  }
+
+  useEffect(() => { setTranslateError(""); }, [idx]);
 
   const progress = queue.length ? (idx / queue.length) * 100 : 0;
 
   if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading queue…</div>;
 
+  const backButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="shrink-0"
+      aria-label="Previous card"
+      title="Previous card"
+      disabled={!canGoBack}
+      onClick={goBack}
+    >
+      <ArrowLeft className="h-4 w-4" />
+    </Button>
+  );
+
   if (done) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
-        <PartyPopper className="h-14 w-14 text-accent" />
-        <h2 className="text-2xl font-bold">{reviewed ? "Session complete!" : "Nothing due right now"}</h2>
-        <p className="text-muted-foreground">
-          {reviewed ? `You reviewed ${reviewed} card${reviewed === 1 ? "" : "s"}. Great work.` : "Add items to study from the Vocabulary, Phrases or Patterns pages, or check back later."}
-        </p>
-        <div className="flex gap-3">
-          <Button onClick={load} className="gap-2"><RotateCcw className="h-4 w-4" /> Reload queue</Button>
-          <Link href="/vocabulary"><Button variant="outline">Add cards</Button></Link>
+      <div
+        className="relative mx-auto max-w-md"
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => { swipe.current = null; }}
+      >
+        {canGoBack && <div className="absolute left-0 top-0">{backButton}</div>}
+        <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
+          <PartyPopper className="h-14 w-14 text-accent" />
+          <h2 className="text-2xl font-bold">{reviewed ? "Session complete!" : "Nothing due right now"}</h2>
+          <p className="text-muted-foreground">
+            {reviewed ? `You reviewed ${reviewed} card${reviewed === 1 ? "" : "s"}. Great work.` : "Add items to study from the Vocabulary, Phrases or Patterns pages, or check back later."}
+          </p>
+          <div className="flex gap-3">
+            <Button onClick={load} className="gap-2"><RotateCcw className="h-4 w-4" /> Reload queue</Button>
+            <Link href="/vocabulary"><Button variant="outline">Add cards</Button></Link>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div
+      className="mx-auto max-w-2xl space-y-6"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => { swipe.current = null; }}
+    >
       <div className="space-y-2">
-        <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span>Card {idx + 1} of {queue.length}</span>
-          <span className="hidden items-center gap-1 sm:flex"><Keyboard className="h-4 w-4" /> Space reveal · 1–4 grade</span>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {backButton}
+          <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <span>Card {idx + 1} of {queue.length}</span>
+            <span className="hidden items-center gap-1 sm:flex"><Keyboard className="h-4 w-4" /> Space reveal · 1–4 grade · ← back</span>
+          </div>
         </div>
         <Progress value={progress} />
       </div>
@@ -131,6 +266,26 @@ export default function StudyPage() {
                     <ul className="space-y-1.5">{current.back.examples.filter(Boolean).map((e, i) => <li key={i} className="rounded-md bg-secondary/50 p-2 text-sm">{e}</li>)}</ul>
                   )}
                   {current.back.notes && <p className="text-sm text-muted-foreground">{current.back.notes}</p>}
+                  <div className="space-y-2 border-t pt-3">
+                    <Button type="button" variant="outline" size="sm" className="gap-2" onClick={translateCard} disabled={translating || !!translation}>
+                      <Languages className="h-4 w-4" />
+                      {translating ? "Translating…" : translation ? "Translated" : "Translate"}
+                    </Button>
+                    {translateError && <p className="text-sm text-destructive">{translateError}</p>}
+                    {translation && (
+                      <div dir={RTL.has(language) ? "rtl" : "ltr"} className={RTL.has(language) ? "farsi space-y-2" : "space-y-2"}>
+                        {translation.front && <p className="font-medium">{translation.front}</p>}
+                        {translation.meaning && <p>{translation.meaning}</p>}
+                        {!!translation.collocations?.length && (
+                          <div className="flex flex-wrap gap-1.5">{translation.collocations.map((c) => <Badge key={c} variant="outline">{c}</Badge>)}</div>
+                        )}
+                        {!!translation.examples?.length && (
+                          <ul className="space-y-1.5">{translation.examples.map((example, i) => <li key={i} className="rounded-md bg-secondary/50 p-2 text-sm">{example}</li>)}</ul>
+                        )}
+                        {translation.notes && <p className="text-sm text-muted-foreground">{translation.notes}</p>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <Button variant="outline" onClick={() => setRevealed(true)}>Reveal answer (Space)</Button>

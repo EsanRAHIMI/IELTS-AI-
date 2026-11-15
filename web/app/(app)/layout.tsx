@@ -79,7 +79,7 @@ function AppShell({
         <main
           className={cn(
             "flex-1 overflow-y-auto overflow-x-clip py-4 px-page md:p-6 lg:p-8",
-            "pb-mobile-nav lg:pb-8",
+            "pb-mobile-nav",
             showPwaBanner && "max-lg:pb-[calc(var(--mobile-tab-bar-offset)+7.5rem)]",
           )}
         >

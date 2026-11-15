@@ -135,6 +135,26 @@ async def classify_pattern(sentence: str, provider_name: str | None = None) -> d
         return fallback
 
 
+async def translate_card(content: dict, language_name: str, provider_name: str | None = None) -> dict:
+    """Translate one study card. Empty dict means the provider did not return text."""
+    provider = get_provider(provider_name)
+    if not provider:
+        return {}
+    prompt = (
+        f"Translate this IELTS study card into {language_name}.\n"
+        "Return JSON with keys: front (the term), meaning (one short explanation), "
+        "examples (array of translated example sentences), collocations (array), notes.\n"
+        f"Card: {json.dumps(content, ensure_ascii=False)}"
+    )
+    try:
+        raw = await provider.complete(prompt, system=SYSTEM, json_mode=True)
+        data = _parse_json(raw) or {}
+        return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning("translate_card failed: %s", exc)
+        return {}
+
+
 async def generate_study_note(term: str, kind: str = "word") -> str:
     provider = get_provider()
     if not provider:
