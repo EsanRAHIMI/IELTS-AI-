@@ -39,11 +39,13 @@ function readStored(): boolean {
   return true;
 }
 
+type SpeakOptions = { force?: boolean };
+
 type SpeechControls = {
   enabled: boolean;
   ready: boolean;
   toggle: () => void;
-  speak: (text: string) => void;
+  speak: (text: string, opts?: SpeakOptions) => void;
   stop: () => void;
 };
 
@@ -54,6 +56,20 @@ const SpeechContext = createContext<SpeechControls>({
   speak: () => {},
   stop: () => {},
 });
+
+function iosSpeech(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function activationActive(): boolean {
+  const nav = navigator as Navigator & { userActivation?: { isActive?: boolean } };
+  return !!nav.userActivation?.isActive;
+}
+
+function cleanLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
 
 function voicesReady(synth: SpeechSynthesis): Promise<SpeechSynthesisVoice[]> {
   const current = synth.getVoices();
@@ -78,6 +94,10 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const enabledRef = useRef(false);
   const ticket = useRef(0);
+  const unlockedRef = useRef(false);
+  const primedRef = useRef(false);
+  const pendingRef = useRef<{ text: string; force: boolean } | null>(null);
+  const speakRef = useRef<(text: string, opts?: SpeakOptions) => void>(() => {});
 
   useEffect(() => {
     const on = readStored();
@@ -88,31 +108,111 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
 
   const stop = useCallback(() => {
     ticket.current += 1;
+    pendingRef.current = null;
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
   }, []);
 
-  const speak = useCallback((text: string) => {
-    const line = text.replace(/\s+/g, " ").trim();
-    if (!line || !enabledRef.current) return;
+  const speak = useCallback((text: string, opts?: SpeakOptions) => {
+    const line = cleanLine(text);
+    const force = !!opts?.force;
+    if (!line) return;
+    if (!force && !enabledRef.current) return;
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const synth = window.speechSynthesis;
+    const ios = iosSpeech();
+
+    // A speak() call before the first tap on iPhone Chrome is ignored and
+    // leaves the engine stuck until the speaker control is toggled.
+    if (ios && !force && !unlockedRef.current && !activationActive()) {
+      pendingRef.current = { text: line, force: false };
+      return;
+    }
+    if (ios && (force || activationActive())) unlockedRef.current = true;
+
     const mine = ++ticket.current;
+    const start = (voices?: SpeechSynthesisVoice[]) => {
+      if (mine !== ticket.current) return;
+      if (!force && !enabledRef.current) return;
+      const utterance = new SpeechSynthesisUtterance(line);
+      utterance.lang = "en-US";
+      utterance.rate = 0.95;
+      utterance.pitch = 1;
+      const voice = pickAmericanVoice(voices || synth.getVoices());
+      if (voice) {
+        try { utterance.voice = voice; } catch { /* use the lang default */ }
+      }
+      const resume = () => {
+        if (mine !== ticket.current) return;
+        try { synth.resume(); } catch { /* already idle */ }
+      };
+      utterance.onstart = () => resume();
+      resume();
+      synth.speak(utterance);
+      if (!ios) return;
+      const kick = window.setInterval(() => {
+        if (mine !== ticket.current) {
+          window.clearInterval(kick);
+          return;
+        }
+        resume();
+      }, 120);
+      window.setTimeout(() => window.clearInterval(kick), 1600);
+    };
+
+    const busy = synth.speaking || synth.pending;
+    if (ios) {
+      if (busy) {
+        synth.cancel();
+        window.setTimeout(() => start(), 50);
+      } else {
+        start();
+      }
+      return;
+    }
+
     synth.cancel();
     window.setTimeout(() => {
-      if (mine !== ticket.current || !enabledRef.current) return;
-      void voicesReady(synth).then((voices) => {
-        if (mine !== ticket.current || !enabledRef.current) return;
-        const utterance = new SpeechSynthesisUtterance(line);
-        utterance.lang = "en-US";
-        utterance.rate = 0.95;
-        utterance.pitch = 1;
-        const voice = pickAmericanVoice(voices);
-        if (voice) utterance.voice = voice;
-        synth.resume();
-        synth.speak(utterance);
-      });
+      if (mine !== ticket.current || (!force && !enabledRef.current)) return;
+      void voicesReady(synth).then((voices) => start(voices));
     }, 40);
+  }, []);
+
+  speakRef.current = speak;
+
+  useEffect(() => {
+    if (!iosSpeech()) return;
+    const onGesture = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-pronounce]")) return;
+      const pending = pendingRef.current;
+      const wasUnlocked = unlockedRef.current;
+      unlockedRef.current = true;
+      if (pending) {
+        pendingRef.current = null;
+        speakRef.current(pending.text, { force: pending.force });
+        return;
+      }
+      if (wasUnlocked || primedRef.current || !window.speechSynthesis) return;
+      primedRef.current = true;
+      try {
+        const synth = window.speechSynthesis;
+        synth.resume();
+        const primer = new SpeechSynthesisUtterance("a");
+        primer.volume = 0;
+        primer.lang = "en-US";
+        primer.rate = 2;
+        synth.speak(primer);
+      } catch {
+        /* the next tap speaks the real word */
+      }
+    };
+    window.addEventListener("pointerdown", onGesture, true);
+    window.addEventListener("touchend", onGesture, true);
+    return () => {
+      window.removeEventListener("pointerdown", onGesture, true);
+      window.removeEventListener("touchend", onGesture, true);
+    };
   }, []);
 
   const toggle = useCallback(() => {
