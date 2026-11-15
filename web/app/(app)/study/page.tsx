@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw, Keyboard, PartyPopper } from "lucide-react";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { WorkStatus, workError, type WorkNotice } from "@/components/ui/work-status";
 
 const GRADES = [
   { key: "again", label: "Again", hint: "1", cls: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
@@ -24,6 +25,8 @@ export default function StudyPage() {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewed, setReviewed] = useState(0);
+  const [saveNotice, setSaveNotice] = useState<WorkNotice | null>(null);
+  const grading = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,14 +44,25 @@ export default function StudyPage() {
 
   const grade = useCallback(
     async (g: string) => {
-      if (!current) return;
-      api(`/study/cards/${current.id}/review`, { method: "POST", body: { grade: g } }).catch(() => {});
+      if (!current || grading.current) return;
+      grading.current = true;
+      setSaveNotice({ phase: "progress", title: "Saving your answer" });
+      try {
+        await api(`/study/cards/${current.id}/review`, { method: "POST", body: { grade: g } });
+      } catch (err) {
+        grading.current = false;
+        setSaveNotice({ phase: "error", title: "Could not save this answer", detail: workError(err) });
+        return;
+      }
+      setSaveNotice({ phase: "success", title: "Answer saved" });
       setReviewed((r) => r + 1);
       setRevealed(false);
       setIdx((i) => i + 1);
     },
     [current],
   );
+
+  useEffect(() => { grading.current = false; }, [idx]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -126,6 +140,7 @@ export default function StudyPage() {
         </motion.div>
       </AnimatePresence>
 
+      {saveNotice && <WorkStatus phase={saveNotice.phase} title={saveNotice.title} detail={saveNotice.detail} onDismiss={() => setSaveNotice(null)} />}
       {revealed && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {GRADES.map((g) => (
