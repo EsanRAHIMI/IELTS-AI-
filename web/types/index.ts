@@ -4,6 +4,16 @@ export interface UserSettings {
   targetBand: number;
   examDate: string | null;
   focusModules: string[];
+  translationLanguage?: string;
+}
+
+export interface CardTranslation {
+  language: string;
+  front: string;
+  meaning: string;
+  examples: string[];
+  collocations: string[];
+  notes: string;
 }
 
 export interface User {
@@ -131,6 +141,7 @@ export interface Card {
   };
   status: string;
   nextReviewAt: string;
+  translations?: Record<string, CardTranslation>;
 }
 
 export interface Dashboard {

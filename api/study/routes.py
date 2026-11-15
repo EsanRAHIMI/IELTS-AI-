@@ -9,8 +9,12 @@ import database as db
 from auth.dependencies import current_user_id, get_current_user
 from http_util import clamp_limit
 from utils.serialization import now, oid, is_oid, serialize
+from ai import service as ai
+from config import settings
+from quotas import consume_ai_call
 from study import sm2
 from study.plan import focus_query, focus_skill_tokens, plan_sizes
+from study.translate import LANGUAGES, card_source_text, normalize_language, normalize_translation, stored_translation
 
 router = APIRouter(prefix="/study", tags=["study"])
 
@@ -126,6 +130,37 @@ async def review_card(card_id: str, body: ReviewBody, uid: str = Depends(current
         if col and is_oid(card.get("refId", "")):
             await col().update_one({"_id": oid(card["refId"])}, {"$set": {"status": "mastered"}})
     return {"ok": True, **{k: serialize(v) for k, v in update.items()}}
+
+
+@router.post("/cards/{card_id}/translate")
+async def translate_study_card(card_id: str, user: dict = Depends(get_current_user)):
+    """Translate the revealed card into the user's Settings language, once per card."""
+    if not is_oid(card_id):
+        raise HTTPException(404, "Not found")
+    uid = user["id"]
+    card = await db.cards().find_one({"_id": oid(card_id), "userId": uid})
+    if not card:
+        raise HTTPException(404, "Not found")
+    language = normalize_language((user.get("settings") or {}).get("translationLanguage"))
+    cached = stored_translation(card, language)
+    if cached:
+        return cached
+
+    provider_name = (user.get("settings") or {}).get("aiProvider") or settings.ai_provider
+    if ai.get_provider(provider_name) is None:
+        raise HTTPException(409, "The selected AI provider is not configured")
+    if not await consume_ai_call(uid, settings.max_ai_calls_per_day):
+        raise HTTPException(429, "Daily AI quota reached")
+
+    raw = await ai.translate_card(card_source_text(card), LANGUAGES[language], provider_name)
+    payload = normalize_translation(raw, language)
+    if not payload:
+        raise HTTPException(502, "Translation failed")
+    await db.cards().update_one(
+        {"_id": card["_id"], "userId": uid},
+        {"$set": {f"translations.{language}": payload, "updatedAt": now()}},
+    )
+    return payload
 
 
 # ---- Daily plan ------------------------------------------------------------

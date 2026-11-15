@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 FocusModule = Literal["Academic", "General", "Writing", "Speaking", "Reading", "Listening"]
 AiProviderName = Literal["openai", "anthropic", "ollama"]
+TranslationLanguage = Literal["fa", "ar", "tr", "ur", "hi", "zh", "es", "fr", "de", "ru", "en"]
 
 
 class RegisterRequest(BaseModel):
@@ -40,6 +41,7 @@ class UserSettings(BaseModel):
         default_factory=lambda: ["Academic", "Writing", "Speaking"],
         max_length=6,
     )
+    translationLanguage: TranslationLanguage = "fa"
 
     @field_validator("examDate")
     @classmethod
