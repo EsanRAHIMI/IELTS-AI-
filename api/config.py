@@ -62,7 +62,9 @@ class Settings(BaseSettings):
 
     # Abuse caps. Registration stays open; these keep one account from draining
     # the shared AI key and object store. Override with env vars if needed.
-    max_upload_bytes: int = 25 * 1024 * 1024
+    # A full coursebook PDF (for example Oxford Word Skills) is often
+    # 60–160 MB. 200 MB still sits under the per-user storage cap.
+    max_upload_bytes: int = 200 * 1024 * 1024
     max_paste_chars: int = 500_000
     max_pdf_pages: int = 80
     max_url_bytes: int = 1_500_000
