@@ -2,14 +2,24 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, RotateCcw, Keyboard, PartyPopper } from "lucide-react";
+import { ArrowLeft, Languages, RotateCcw, Keyboard, PartyPopper } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { Card as CardType } from "@/types";
+import { useAuth } from "@/lib/auth";
+import type { Card as CardType, CardTranslation } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+
+const RTL = new Set(["fa", "ar", "ur"]);
+
+function savedTranslation(card: CardType, language: string): CardTranslation | null {
+  const saved = card.translations?.[language];
+  if (!saved) return null;
+  const pieces = [saved.front, saved.meaning, saved.notes, ...(saved.examples || []), ...(saved.collocations || [])];
+  return pieces.some((part) => (part || "").trim()) ? saved : null;
+}
 
 const GRADES = [
   { key: "again", label: "Again", hint: "1", cls: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
@@ -43,11 +53,15 @@ function gradeFromEvent(e: KeyboardEvent): string | null {
 }
 
 export default function StudyPage() {
+  const { user } = useAuth();
+  const language = user?.settings.translationLanguage || "fa";
   const [queue, setQueue] = useState<CardType[]>([]);
   const [idx, setIdx] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewed, setReviewed] = useState(0);
+  const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,8 +76,27 @@ export default function StudyPage() {
 
   const current = queue[idx];
   const done = !loading && (!current || idx >= queue.length);
+  const translation = current ? savedTranslation(current, language) : null;
   const canGoBack = idx > 0;
   const grading = useRef(false);
+
+  const translateCard = useCallback(async () => {
+    if (!current || savedTranslation(current, language) || translating) return;
+    setTranslating(true);
+    setTranslateError("");
+    try {
+      const saved = await api<CardTranslation>(`/study/cards/${current.id}/translate`, { method: "POST" });
+      setQueue((items) => items.map((card) => (
+        card.id === current.id
+          ? { ...card, translations: { ...(card.translations || {}), [saved.language || language]: saved } }
+          : card
+      )));
+    } catch (err) {
+      setTranslateError(err instanceof Error ? err.message : "Translation failed");
+    } finally {
+      setTranslating(false);
+    }
+  }, [current, language, translating]);
 
   const grade = useCallback(
     async (g: string) => {
@@ -135,6 +168,8 @@ export default function StudyPage() {
     swipe.current = null;
     if (dx > 72 && Math.abs(dx) > Math.abs(dy)) goBack();
   }
+
+  useEffect(() => { setTranslateError(""); }, [idx]);
 
   const progress = queue.length ? (idx / queue.length) * 100 : 0;
 
@@ -221,6 +256,26 @@ export default function StudyPage() {
                     <ul className="space-y-1.5">{current.back.examples.filter(Boolean).map((e, i) => <li key={i} className="rounded-md bg-secondary/50 p-2 text-sm">{e}</li>)}</ul>
                   )}
                   {current.back.notes && <p className="text-sm text-muted-foreground">{current.back.notes}</p>}
+                  <div className="space-y-2 border-t pt-3">
+                    <Button type="button" variant="outline" size="sm" className="gap-2" onClick={translateCard} disabled={translating || !!translation}>
+                      <Languages className="h-4 w-4" />
+                      {translating ? "Translating…" : translation ? "Translated" : "Translate"}
+                    </Button>
+                    {translateError && <p className="text-sm text-destructive">{translateError}</p>}
+                    {translation && (
+                      <div dir={RTL.has(language) ? "rtl" : "ltr"} className={RTL.has(language) ? "farsi space-y-2" : "space-y-2"}>
+                        {translation.front && <p className="font-medium">{translation.front}</p>}
+                        {translation.meaning && <p>{translation.meaning}</p>}
+                        {!!translation.collocations?.length && (
+                          <div className="flex flex-wrap gap-1.5">{translation.collocations.map((c) => <Badge key={c} variant="outline">{c}</Badge>)}</div>
+                        )}
+                        {!!translation.examples?.length && (
+                          <ul className="space-y-1.5">{translation.examples.map((example, i) => <li key={i} className="rounded-md bg-secondary/50 p-2 text-sm">{example}</li>)}</ul>
+                        )}
+                        {translation.notes && <p className="text-sm text-muted-foreground">{translation.notes}</p>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <Button variant="outline" onClick={() => setRevealed(true)}>Reveal answer (Space)</Button>

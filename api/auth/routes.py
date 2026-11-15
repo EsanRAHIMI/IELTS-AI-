@@ -19,6 +19,7 @@ DEFAULT_SETTINGS = {
     "targetBand": 7.5,
     "examDate": None,
     "focusModules": ["Academic", "Writing", "Speaking"],
+    "translationLanguage": "fa",
 }
 
 
