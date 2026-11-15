@@ -13,6 +13,7 @@ from ai import service as ai
 from config import settings
 from quotas import consume_ai_call
 from study import sm2
+from study.day_progress import ensure_session, mark_reviewed, remaining_ids
 from study.plan import focus_query, focus_skill_tokens, plan_sizes
 from study.translate import LANGUAGES, card_source_text, normalize_language, normalize_translation, stored_translation
 
@@ -95,14 +96,31 @@ async def list_cards(
     return {"items": [serialize(d) async for d in cur]}
 
 
+async def _due_card_ids(uid: str, limit: int) -> list[str]:
+    q = {"userId": uid, "nextReviewAt": {"$lte": now()}}
+    cur = db.cards().find(q, {"_id": 1}).sort([("status", 1), ("nextReviewAt", 1)]).limit(limit)
+    return [str(doc["_id"]) async for doc in cur]
+
+
 @router.get("/queue")
 async def review_queue(uid: str = Depends(current_user_id), limit: int = Query(40, ge=1, le=100)):
-    """Cards that are due now (nextReviewAt <= now), new first."""
-    q = {"userId": uid, "nextReviewAt": {"$lte": now()}}
-    cur = db.cards().find(q).sort([("status", 1), ("nextReviewAt", 1)]).limit(limit)
-    items = [serialize(d) async for d in cur]
-    total_due = await db.cards().count_documents(q)
-    return {"items": items, "totalDue": total_due}
+    """Today's remaining cards, in the order the session started."""
+    capped = clamp_limit(limit, default=40, maximum=100)
+    session = await db.study_progress().find_one({"_id": f"{uid}:{now().date().isoformat()}"})
+    if not session or not session.get("cardIds"):
+        session = await ensure_session(uid, await _due_card_ids(uid, capped))
+    wanted = remaining_ids(session.get("cardIds"), session.get("reviewedIds"))
+    found: dict = {}
+    ids = [oid(card_id) for card_id in wanted if is_oid(card_id)]
+    if ids:
+        async for doc in db.cards().find({"_id": {"$in": ids}, "userId": uid}):
+            found[str(doc["_id"])] = doc
+    items = [serialize(found[card_id]) for card_id in wanted if card_id in found]
+    return {
+        "items": items,
+        "totalDue": len(items),
+        "reviewedToday": len(session.get("reviewedIds") or []),
+    }
 
 
 class ReviewBody(BaseModel):
@@ -121,6 +139,7 @@ async def review_card(card_id: str, body: ReviewBody, uid: str = Depends(current
     except ValueError:
         raise HTTPException(400, "Invalid grade") from None
     await db.cards().update_one({"_id": oid(card_id)}, {"$set": {**update, "updatedAt": now()}})
+    await mark_reviewed(uid, card_id)
     await db.reviews().insert_one({
         "userId": uid, "cardId": card_id, "type": card.get("type"), "grade": body.grade,
         "correct": body.grade in ("good", "easy"), "reviewedAt": now(),

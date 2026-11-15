@@ -74,6 +74,10 @@ def plans():
     return col("daily_plans")
 
 
+def study_progress():
+    return col("study_progress")
+
+
 def jobs():
     return col("jobs")
 
@@ -121,6 +125,7 @@ async def init_indexes() -> None:
         await _ensure_index(reviews(), [("userId", 1), ("reviewedAt", -1)])
         await _ensure_index(col("rate_buckets"), "expiresAt", expireAfterSeconds=0, name="rate_ttl")
         await _ensure_index(col("usage_daily"), "expiresAt", expireAfterSeconds=0, name="usage_ttl")
+        await _ensure_index(study_progress(), "expiresAt", expireAfterSeconds=0, name="study_progress_ttl")
         logger.info("Mongo indexes ensured")
     except Exception as exc:  # pragma: no cover - startup resilience
         logger.warning("Could not ensure indexes: %s", exc)

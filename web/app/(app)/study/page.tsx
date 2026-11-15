@@ -60,15 +60,18 @@ export default function StudyPage() {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewed, setReviewed] = useState(0);
+  const [reviewError, setReviewError] = useState("");
   const [translating, setTranslating] = useState(false);
   const [translateError, setTranslateError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await api<{ items: CardType[]; totalDue: number }>("/study/queue", { query: { limit: 40 } });
+    const res = await api<{ items: CardType[]; totalDue: number; reviewedToday?: number }>("/study/queue", { query: { limit: 40 } });
     setQueue(res.items);
     setIdx(0);
     setRevealed(false);
+    setReviewed(res.reviewedToday || 0);
+    setReviewError("");
     setLoading(false);
   }, []);
 
@@ -102,7 +105,14 @@ export default function StudyPage() {
     async (g: string) => {
       if (!current || grading.current) return;
       grading.current = true;
-      api(`/study/cards/${current.id}/review`, { method: "POST", body: { grade: g } }).catch(() => {});
+      setReviewError("");
+      try {
+        await api(`/study/cards/${current.id}/review`, { method: "POST", body: { grade: g } });
+      } catch (err) {
+        grading.current = false;
+        setReviewError(err instanceof Error ? err.message : "Could not save this review");
+        return;
+      }
       setReviewed((r) => r + 1);
       setRevealed(false);
       setIdx((i) => i + 1);
@@ -285,6 +295,7 @@ export default function StudyPage() {
         </motion.div>
       </AnimatePresence>
 
+      {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
       {revealed && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {GRADES.map((g) => (
