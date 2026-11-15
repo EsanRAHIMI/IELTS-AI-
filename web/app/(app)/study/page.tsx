@@ -6,6 +6,7 @@ import { ArrowLeft, Languages, RotateCcw, Keyboard, PartyPopper } from "lucide-r
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useSpeech } from "@/lib/speech";
 import type { Card as CardType, CardTranslation } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export default function StudyPage() {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewed, setReviewed] = useState(0);
+  const { enabled: speakOn, ready: speakReady, speak, stop } = useSpeech();
   const [saveNotice, setSaveNotice] = useState<WorkNotice | null>(null);
   const [reviewError, setReviewError] = useState("");
   const [translating, setTranslating] = useState(false);
@@ -81,6 +83,16 @@ export default function StudyPage() {
   useEffect(() => { load(); }, [load]);
 
   const current = queue[idx];
+
+  useEffect(() => {
+    if (!speakReady) return;
+    if (!speakOn || !current?.front) {
+      stop();
+      return;
+    }
+    speak(current.front);
+    return () => stop();
+  }, [speakReady, speakOn, current?.id, current?.front, speak, stop]);
   const done = !loading && (!current || idx >= queue.length);
   const translation = current ? savedTranslation(current, language) : null;
   const canGoBack = idx > 0;
