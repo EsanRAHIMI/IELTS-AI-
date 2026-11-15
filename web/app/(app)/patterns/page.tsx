@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
-import { useToast } from "@/components/ui/toast";
+import { WorkStatus, useWorkNotice } from "@/components/ui/work-status";
 
 const CATEGORIES = [
   "Writing Task 1 trend description",
@@ -27,7 +27,7 @@ const CATEGORIES = [
 ];
 
 export default function PatternsPage() {
-  const { toast } = useToast();
+  const { notice, run } = useWorkNotice();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -36,16 +36,19 @@ export default function PatternsPage() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
   async function addToStudy(p: Pattern) {
-    await api("/study/cards", { method: "POST", body: { type: "sentence_pattern", refId: p.id } });
-    toast({ title: "Added to study", variant: "success" });
+    await run("Adding this pattern to study", async () => {
+      await api("/study/cards", { method: "POST", body: { type: "sentence_pattern", refId: p.id } });
+    }, "Added to study");
   }
-  function copy(text: string) {
-    navigator.clipboard?.writeText(text);
-    toast({ title: "Copied template" });
+  async function copy(text: string) {
+    await run("Copying the template", async () => {
+      await navigator.clipboard.writeText(text);
+    }, "Template copied");
   }
 
   return (
     <div className="page-stack">
+      {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
       <Card>
         <CardContent className="grid grid-cols-1 gap-3 p-4">
           <div className="relative min-w-0">

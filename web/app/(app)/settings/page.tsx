@@ -10,19 +10,33 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/toast";
+import { WorkStatus, useWorkNotice, workError } from "@/components/ui/work-status";
 
 const MODULES = ["Academic", "General", "Writing", "Speaking", "Reading", "Listening"];
 const PROVIDERS = ["openai", "anthropic", "ollama"];
+const LANGUAGES = [
+  ["fa", "Persian"],
+  ["ar", "Arabic"],
+  ["tr", "Turkish"],
+  ["ur", "Urdu"],
+  ["hi", "Hindi"],
+  ["zh", "Chinese"],
+  ["es", "Spanish"],
+  ["fr", "French"],
+  ["de", "German"],
+  ["ru", "Russian"],
+  ["en", "English"],
+];
 
 export default function SettingsPage() {
   const { user, setUser } = useAuth();
-  const { toast } = useToast();
+  const { notice, setNotice } = useWorkNotice();
   const [aiProvider, setAiProvider] = useState("openai");
   const [dailyTarget, setDailyTarget] = useState(30);
   const [targetBand, setTargetBand] = useState(7.5);
   const [examDate, setExamDate] = useState("");
   const [focusModules, setFocusModules] = useState<string[]>([]);
+  const [translationLanguage, setTranslationLanguage] = useState("fa");
   const [health, setHealth] = useState<{ aiConfigured: boolean; aiProvider: string; db: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,6 +48,7 @@ export default function SettingsPage() {
       setTargetBand(s.targetBand);
       setExamDate(s.examDate || "");
       setFocusModules(s.focusModules || []);
+      setTranslationLanguage(s.translationLanguage || "fa");
     }
   }, [user]);
 
@@ -47,15 +62,16 @@ export default function SettingsPage() {
 
   async function save() {
     setBusy(true);
+    setNotice({ phase: "progress", title: "Saving settings" });
     try {
       const updated = await api<User>("/auth/me/settings", {
         method: "PUT",
-        body: { aiProvider, dailyTarget: Number(dailyTarget), targetBand: Number(targetBand), examDate: examDate || null, focusModules },
+        body: { aiProvider, dailyTarget: Number(dailyTarget), targetBand: Number(targetBand), examDate: examDate || null, focusModules, translationLanguage },
       });
       setUser(updated);
-      toast({ title: "Settings saved", variant: "success" });
-    } catch (e: any) {
-      toast({ title: "Failed", description: e.message, variant: "error" });
+      setNotice({ phase: "success", title: "Settings saved" });
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not save settings", detail: workError(e) });
     } finally { setBusy(false); }
   }
 
@@ -99,6 +115,13 @@ export default function SettingsPage() {
             <Label>Exam date</Label>
             <Input type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} />
           </div>
+          <div className="space-y-1.5 sm:col-span-3">
+            <Label>Translation language</Label>
+            <Select value={translationLanguage} onChange={(e) => setTranslationLanguage(e.target.value)}>
+              {LANGUAGES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+            </Select>
+            <p className="text-xs text-muted-foreground">Study Mode translates a revealed card into this language.</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -124,19 +147,21 @@ export default function SettingsPage() {
 
       <PasswordCard />
 
+      {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
       <Button onClick={save} disabled={busy} className="gap-2"><Save className="h-4 w-4" /> {busy ? "Saving…" : "Save settings"}</Button>
     </div>
   );
 }
 
 function PasswordCard() {
-  const { toast } = useToast();
+  const { notice, setNotice } = useWorkNotice();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function changePassword() {
     setBusy(true);
+    setNotice({ phase: "progress", title: "Updating your password" });
     try {
       const res = await api<{ accessToken: string; user: User }>("/auth/change-password", {
         method: "POST",
@@ -145,9 +170,9 @@ function PasswordCard() {
       setToken(res.accessToken);
       setCurrentPassword("");
       setNewPassword("");
-      toast({ title: "Password updated", variant: "success" });
-    } catch (e: any) {
-      toast({ title: "Could not change password", description: e.message, variant: "error" });
+      setNotice({ phase: "success", title: "Password updated", detail: "Other sessions were signed out." });
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not change password", detail: workError(e) });
     } finally {
       setBusy(false);
     }
@@ -171,6 +196,7 @@ function PasswordCard() {
         <Button type="button" variant="outline" disabled={busy || newPassword.length < 6} onClick={changePassword}>
           {busy ? "Updating…" : "Update password"}
         </Button>
+        {notice && <WorkStatus className="sm:col-span-2" phase={notice.phase} title={notice.title} detail={notice.detail} />}
       </CardContent>
     </Card>
   );

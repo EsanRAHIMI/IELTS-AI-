@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Sheet, SheetBody } from "@/components/ui/sheet";
 import { Pagination } from "@/components/ui/pagination";
-import { useToast } from "@/components/ui/toast";
+import { WorkStatus, useWorkNotice } from "@/components/ui/work-status";
 
 const SECTIONS = ["Writing Task 1", "Writing Task 2", "Reading", "Listening", "Speaking"];
 const DIFFICULTIES = ["A2", "B1", "B2", "C1", "C2"];
@@ -22,7 +22,7 @@ const STATUSES = ["new", "learning", "review", "mastered"];
 const POS = ["noun", "verb", "adjective", "adverb"];
 
 export default function VocabularyPage() {
-  const { toast } = useToast();
+  const { notice, run } = useWorkNotice();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [section, setSection] = useState("");
@@ -37,22 +37,27 @@ export default function VocabularyPage() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
   async function addToStudy(w: Word) {
-    await api("/study/cards", { method: "POST", body: { type: "word", refId: w.id } });
-    toast({ title: `Added "${w.word}" to study`, variant: "success" });
-    reload();
+    await run(`Adding “${w.word}” to study`, async () => {
+      await api("/study/cards", { method: "POST", body: { type: "word", refId: w.id } });
+      reload();
+    }, `Added “${w.word}” to study`);
   }
   async function toggleImportant(w: Word) {
-    await api(`/vocabulary/${w.id}/important`, { method: "PATCH" });
-    reload();
+    await run(w.important ? `Removing the star from “${w.word}”` : `Starring “${w.word}”`, async () => {
+      await api(`/vocabulary/${w.id}/important`, { method: "PATCH" });
+      reload();
+    }, w.important ? `Star removed from “${w.word}”` : `Starred “${w.word}”`);
   }
   async function hide(w: Word) {
-    await api(`/vocabulary/${w.id}/hide`, { method: "PATCH" });
-    toast({ title: "Hidden" });
-    reload();
+    await run(`Hiding “${w.word}”`, async () => {
+      await api(`/vocabulary/${w.id}/hide`, { method: "PATCH" });
+      reload();
+    }, `Hidden “${w.word}”`);
   }
 
   return (
     <div className="page-stack">
+      {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
       <Card>
         <CardContent className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
           <div className="relative sm:col-span-2 xl:col-span-1">
@@ -221,26 +226,25 @@ function WordMobileCard({
 }
 
 function WordDetailSheet({ id, onClose, onChanged }: { id: string | null; onClose: () => void; onChanged: () => void }) {
-  const { toast } = useToast();
+  const { notice, run } = useWorkNotice();
   const { data: word, loading, reload } = useApiData<Word>(id ? `/vocabulary/${id}` : null);
   const [busy, setBusy] = useState(false);
 
   async function regenerate() {
     if (!id) return;
     setBusy(true);
-    try {
+    await run("Regenerating the explanation", async () => {
       await api(`/vocabulary/${id}/regenerate`, { method: "POST" });
-      toast({ title: "AI explanation regenerated", variant: "success" });
       reload();
-    } catch (e: any) {
-      toast({ title: "Failed", description: e.message, variant: "error" });
-    } finally { setBusy(false); }
+    }, "Explanation regenerated");
+    setBusy(false);
   }
   async function addToStudy() {
     if (!id) return;
-    await api("/study/cards", { method: "POST", body: { type: "word", refId: id } });
-    toast({ title: "Added to study", variant: "success" });
-    onChanged();
+    await run("Adding to study", async () => {
+      await api("/study/cards", { method: "POST", body: { type: "word", refId: id } });
+      onChanged();
+    }, "Added to study");
   }
 
   return (
@@ -285,6 +289,7 @@ function WordDetailSheet({ id, onClose, onChanged }: { id: string | null; onClos
               <Field label="Sources"><div className="flex flex-wrap gap-2">{word.sources.map((s) => <Badge key={s.id} variant="outline">{s.title}</Badge>)}</div></Field>
             )}
 
+            {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
             <div className="flex flex-col gap-2 pt-2 sm:flex-row">
               <Button onClick={addToStudy} className="flex-1 gap-2"><Plus className="h-4 w-4" /> Add to flashcards</Button>
               <Button variant="outline" onClick={regenerate} disabled={busy} className="flex-1 gap-2 sm:flex-none"><RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Regenerate</Button>

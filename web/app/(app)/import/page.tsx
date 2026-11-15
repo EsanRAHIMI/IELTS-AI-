@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { WorkStatus, workError, type WorkNotice } from "@/components/ui/work-status";
 
 async function openDownload(id: string) {
   const res = await api<{ url: string; authenticated?: boolean }>(`/sources/${id}/download-url`);
@@ -36,7 +37,8 @@ export default function ImportPage() {
   const { toast } = useToast();
   const { data, loading, reload } = useApiData<{ items: Source[] }>("/sources");
   const { data: activeJobs, reload: reloadJobs } = useApiData<{ items: Job[] }>("/jobs/active");
-  const [busy, setBusy] = useState(false);
+  const [task, setTask] = useState<"file" | "text" | "url" | null>(null);
+  const busy = task !== null;
   const [text, setText] = useState("");
   const [textTitle, setTextTitle] = useState("");
   const [url, setUrl] = useState("");
@@ -45,12 +47,17 @@ export default function ImportPage() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [reprocessId, setReprocessId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<WorkNotice & { sourceId?: string } | null>(null);
+  const [uploadName, setUploadName] = useState<string | null>(null);
 
   async function download(id: string) {
+    setNotice({ phase: "progress", title: "Preparing the original file" });
     try {
       await openDownload(id);
-    } catch (e: any) {
-      toast({ title: "Download unavailable", description: e.message, variant: "error" });
+      setNotice({ phase: "success", title: "Download started" });
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Download unavailable", detail: workError(e) });
+      toast({ title: "Download unavailable", description: workError(e), variant: "error" });
     }
   }
 
@@ -73,34 +80,64 @@ export default function ImportPage() {
     return map;
   }, [activeJobs]);
 
+  useEffect(() => {
+    if (!notice?.sourceId) return;
+    const source = data?.items.find((item) => item.id === notice.sourceId);
+    if (!source) return;
+    const job = jobBySource.get(source.id);
+    const log = job?.lastLog || job?.logs?.[job.logs.length - 1]?.msg;
+    const failed = source.status === "error" || job?.status === "failed";
+    const finished = source.status === "done" || job?.status === "done";
+    const next: WorkNotice & { sourceId?: string } = failed
+      ? { phase: "error", title: `Processing failed · ${source.title}`, detail: job?.error || "The file could not be processed.", sourceId: source.id }
+      : finished
+        ? { phase: "success", title: `Finished · ${source.title}`, detail: `${source.stats?.wordsExtracted ?? 0} words · ${source.stats?.phrasesExtracted ?? 0} phrases extracted.`, sourceId: source.id }
+        : { phase: "progress", title: source.status === "pending" ? `Queued · ${source.title}` : `Processing · ${source.title}`, detail: log || "Working in the background. You can leave and come back.", sourceId: source.id };
+    setNotice((prev) => (
+      prev && prev.phase === next.phase && prev.title === next.title && prev.detail === next.detail ? prev : next
+    ));
+  }, [data, jobBySource, notice?.sourceId]);
+
   async function submitText() {
-    if (text.trim().length < 10) return toast({ title: "Add more text", variant: "error" });
-    setBusy(true);
+    if (text.trim().length < 10) {
+      setNotice({ phase: "error", title: "Add more text", detail: "Paste at least a short passage before processing." });
+      return;
+    }
+    setTask("text");
+    setNotice({ phase: "progress", title: "Sending pasted text", detail: textTitle || "Pasted text" });
     try {
-      await api("/sources/text", { method: "POST", body: { title: textTitle || "Pasted text", text } });
+      const created = await api<{ id: string }>("/sources/text", { method: "POST", body: { title: textTitle || "Pasted text", text } });
       setText(""); setTextTitle("");
-      toast({ title: "Processing started", variant: "success" });
+      setNotice({ phase: "progress", title: "Queued · pasted text", detail: "Processing continues on the server.", sourceId: created.id });
       reload();
-    } catch (e: any) {
-      toast({ title: "Failed", description: e.message, variant: "error" });
-    } finally { setBusy(false); }
+      reloadJobs();
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not process text", detail: workError(e) });
+    } finally { setTask(null); }
   }
 
   async function submitUrl() {
-    if (!url.startsWith("http")) return toast({ title: "Enter a valid URL", variant: "error" });
-    setBusy(true);
+    if (!url.startsWith("http")) {
+      setNotice({ phase: "error", title: "Enter a valid URL", detail: "The address needs to start with http:// or https://." });
+      return;
+    }
+    setTask("url");
+    setNotice({ phase: "progress", title: "Fetching the page", detail: url });
     try {
-      await api("/sources/url", { method: "POST", body: { url } });
+      const created = await api<{ id: string }>("/sources/url", { method: "POST", body: { url } });
       setUrl("");
-      toast({ title: "Fetching & processing", variant: "success" });
+      setNotice({ phase: "progress", title: "Queued · web page", detail: "Processing continues on the server.", sourceId: created.id });
       reload();
-    } catch (e: any) {
-      toast({ title: "Failed", description: e.message, variant: "error" });
-    } finally { setBusy(false); }
+      reloadJobs();
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not fetch that URL", detail: workError(e) });
+    } finally { setTask(null); }
   }
 
   async function submitFile(file: File) {
-    setBusy(true);
+    setTask("file");
+    setUploadName(file.name);
+    setNotice({ phase: "progress", title: `Uploading ${file.name}`, detail: "Stay on this page until the file is stored." });
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -109,37 +146,50 @@ export default function ImportPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
         body: fd,
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Upload failed");
-      toast({
-        title: "Uploaded — processing on server",
-        description: "You can close this tab; check Import later for status.",
-        variant: "success",
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || "Upload failed");
+      setNotice({
+        phase: "progress",
+        title: `Processing ${file.name}`,
+        detail: "Upload finished. Extraction continues in the background.",
+        sourceId: body.id,
       });
       reload();
       reloadJobs();
-    } catch (e: any) {
-      toast({ title: "Failed", description: e.message, variant: "error" });
-    } finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: `Upload failed · ${file.name}`, detail: workError(e) });
+    } finally { setTask(null); setUploadName(null); if (fileRef.current) fileRef.current.value = ""; }
   }
 
   async function reprocess(id: string, resetExtractedData = false) {
-    await api(`/sources/${id}/reprocess`, {
-      method: "POST",
-      query: { resetExtractedData },
+    const title = data?.items.find((item) => item.id === id)?.title || "this source";
+    setNotice({
+      phase: "progress",
+      title: `Reprocessing · ${title}`,
+      detail: resetExtractedData ? "Clearing old extracted items first." : "Using the stored file.",
+      sourceId: id,
     });
-    toast({ title: resetExtractedData ? "Reprocessing (old data cleared)" : "Reprocessing", variant: "success" });
-    reload();
-    reloadJobs();
+    try {
+      await api(`/sources/${id}/reprocess`, {
+        method: "POST",
+        query: { resetExtractedData },
+      });
+      reload();
+      reloadJobs();
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not reprocess", detail: workError(e) });
+    }
   }
 
   async function cancelProcessing(id: string) {
+    setNotice({ phase: "progress", title: "Stopping processing" });
     try {
       await api(`/jobs/by-source/${id}/cancel`, { method: "POST" });
-      toast({ title: "Processing stopped", variant: "success" });
+      setNotice({ phase: "success", title: "Processing stopped" });
       reload();
       reloadJobs();
-    } catch (e: any) {
-      toast({ title: "Could not stop", description: e.message, variant: "error" });
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not stop", detail: workError(e) });
     }
   }
 
@@ -157,14 +207,25 @@ export default function ImportPage() {
 
             <TabsContent value="file">
               <div
-                className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 text-center transition-colors hover:border-primary"
-                onClick={() => fileRef.current?.click()}
+                className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 text-center transition-colors ${busy && uploadName ? "border-accent bg-accent/5" : "cursor-pointer hover:border-primary"}`}
+                onClick={() => { if (!busy) fileRef.current?.click(); }}
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) submitFile(e.dataTransfer.files[0]); }}
+                onDrop={(e) => { e.preventDefault(); if (!busy && e.dataTransfer.files[0]) submitFile(e.dataTransfer.files[0]); }}
+                aria-busy={!!(busy && uploadName)}
               >
+                {busy && uploadName ? (
+                  <>
+                    <Loader2 className="h-10 w-10 animate-spin text-accent" />
+                    <p className="font-medium">Uploading {uploadName}</p>
+                    <p className="text-sm text-muted-foreground">Keep this page open until the file is stored.</p>
+                  </>
+                ) : (
+                  <>
                 <UploadCloud className="h-10 w-10 text-muted-foreground" />
                 <p className="font-medium">Drop a file or click to browse</p>
                 <p className="text-sm text-muted-foreground">PDF, DOCX, TXT, CSV, JSON</p>
+                  </>
+                )}
                 <input
                   ref={fileRef}
                   type="file"
@@ -185,7 +246,7 @@ export default function ImportPage() {
                   <Label>Paste text</Label>
                   <Textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste a reading passage, transcript or essay…" />
                 </div>
-                <Button onClick={submitText} disabled={busy} className="w-full">Process text</Button>
+                <Button onClick={submitText} disabled={busy} className="w-full">{task === "text" ? "Sending…" : "Process text"}</Button>
               </div>
             </TabsContent>
 
@@ -195,10 +256,19 @@ export default function ImportPage() {
                   <Label>Web page URL</Label>
                   <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
                 </div>
-                <Button onClick={submitUrl} disabled={busy} className="w-full gap-2"><Link2 className="h-4 w-4" /> Fetch & process</Button>
+                <Button onClick={submitUrl} disabled={busy} className="w-full gap-2"><Link2 className="h-4 w-4" /> {task === "url" ? "Fetching…" : "Fetch & process"}</Button>
               </div>
             </TabsContent>
           </Tabs>
+          {notice && (
+            <WorkStatus
+              className="mt-4"
+              phase={notice.phase}
+              title={notice.title}
+              detail={notice.detail}
+              onDismiss={() => setNotice(null)}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -232,12 +302,13 @@ export default function ImportPage() {
                     {(s.originalFileName || s.type).toString()} · {s.type.toUpperCase()} ·{" "}
                     {s.stats?.wordsExtracted ?? 0} words · {s.stats?.phrasesExtracted ?? 0} phrases
                   </p>
-                  {["pending", "processing"].includes(s.status) && lastLog && (
-                    <p className="mt-1 line-clamp-2 text-xs text-accent">{lastLog}</p>
-                  )}
                 </div>
-                <StatusBadge status={s.status} />
               </div>
+              <WorkStatus
+                compact
+                className="mt-3"
+                {...sourceWork(s.status, s.status === "error" ? (job?.error || lastLog) : lastLog)}
+              />
               <div className="mt-3 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
                 <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setPreviewId(s.id)}>
                   <Eye className="h-3.5 w-3.5" /> Review
@@ -295,10 +366,19 @@ export default function ImportPage() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === "done") return <Badge variant="success" className="gap-1"><CheckCircle2 className="h-3 w-3" /> Done</Badge>;
-  if (status === "error") return <Badge variant="secondary" className="gap-1 bg-destructive/15 text-destructive"><AlertCircle className="h-3 w-3" /> Error</Badge>;
-  return <Badge variant="accent" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> {status}</Badge>;
+function sourceWork(status: string, detail?: string): WorkNotice {
+  if (status === "done") return { phase: "success", title: "Finished", detail: detail || "Extraction is complete." };
+  if (status === "error") return { phase: "error", title: "Failed", detail: detail || "Processing did not finish." };
+  if (status === "pending") return { phase: "progress", title: "Queued", detail: detail || "Waiting to start." };
+  return { phase: "progress", title: "Processing", detail: detail || "Working in the background." };
+}
+
+function jobWork(job: Job | null): WorkNotice {
+  if (!job) return { phase: "progress", title: "Looking up the job", detail: "Checking the latest server status." };
+  if (job.status === "done") return { phase: "success", title: "Finished", detail: job.lastLog || "This job completed." };
+  if (job.status === "failed" || job.status === "error") return { phase: "error", title: "Failed", detail: job.error || job.lastLog || "The job stopped with an error." };
+  if (job.status === "pending") return { phase: "progress", title: "Queued", detail: job.lastLog || "Waiting for a worker." };
+  return { phase: "progress", title: "Processing", detail: job.lastLog || job.error || "Working in the background." };
 }
 
 function JobLogsDialog({ sourceId, onClose }: { sourceId: string | null; onClose: () => void }) {
@@ -322,6 +402,7 @@ function JobLogsDialog({ sourceId, onClose }: { sourceId: string | null; onClose
   return (
     <Dialog open={!!sourceId} onOpenChange={(v) => !v && onClose()}>
       <DialogHeader><DialogTitle>Extraction logs</DialogTitle></DialogHeader>
+      <WorkStatus {...jobWork(job)} className="mb-3" />
       <div className="max-h-80 space-y-1 overflow-y-auto rounded-md bg-secondary/50 p-3 font-mono text-xs">
         {job?.logs?.length ? (
           job.logs.map((l, i) => <div key={i}>· {l.msg}</div>)
@@ -465,6 +546,7 @@ function DeleteSourceDialog({
   );
   const [keepData, setKeepData] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<WorkNotice | null>(null);
 
   useEffect(() => {
     if (sourceId) setKeepData(true);
@@ -473,6 +555,7 @@ function DeleteSourceDialog({
   async function confirm() {
     if (!sourceId) return;
     setBusy(true);
+    setNotice({ phase: "progress", title: "Removing this source" });
     try {
       await api(`/sources/${sourceId}`, {
         method: "DELETE",
@@ -484,8 +567,8 @@ function DeleteSourceDialog({
       });
       onDeleted();
       onClose();
-    } catch (e: any) {
-      toast({ title: "Delete failed", description: e.message, variant: "error" });
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not remove this source", detail: workError(e) });
     } finally {
       setBusy(false);
     }
@@ -558,6 +641,7 @@ function DeleteSourceDialog({
             </label>
           </div>
 
+          {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose} disabled={busy}>
               Cancel
@@ -585,6 +669,7 @@ function ReprocessSourceDialog({
 }) {
   const [clearData, setClearData] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<WorkNotice | null>(null);
 
   useEffect(() => {
     if (sourceId) setClearData(false);
@@ -593,9 +678,12 @@ function ReprocessSourceDialog({
   async function confirm() {
     if (!sourceId) return;
     setBusy(true);
+    setNotice({ phase: "progress", title: "Starting reprocess" });
     try {
       await onReprocess(sourceId, clearData);
       onClose();
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not start reprocess", detail: workError(e) });
     } finally {
       setBusy(false);
     }
@@ -625,6 +713,7 @@ function ReprocessSourceDialog({
             </span>
           </span>
         </label>
+        {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
