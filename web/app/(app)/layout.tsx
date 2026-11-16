@@ -11,6 +11,7 @@ import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { PwaInstallProvider, usePwaInstallContext } from "@/components/pwa-install-provider";
 import { MobileTabBar } from "@/components/mobile-tab-bar";
 import { PrepOrientation } from "@/components/prep-orientation";
+import { OrientationVisibility } from "@/components/orientation-visibility";
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -76,19 +77,21 @@ function AppShell({
         <Sidebar onNavigate={() => setMobileOpen(false)} />
       </Sheet>
       <div className="flex min-h-app min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar onMenu={() => setMobileOpen(true)} title={title} />
-        <PrepOrientation />
-        <main
-          className={cn(
-            "flex-1 overflow-y-auto overflow-x-clip py-4 px-page md:p-6 lg:p-8",
-            "pb-mobile-nav",
-            showPwaBanner && "max-lg:pb-[calc(var(--mobile-tab-bar-offset)+7.5rem)]",
-          )}
-        >
-          <div className="mx-auto min-w-0 max-w-6xl">{children}</div>
-        </main>
-        <PwaInstallBanner />
-        <MobileTabBar />
+        <OrientationVisibility>
+          <Topbar onMenu={() => setMobileOpen(true)} title={title} />
+          <PrepOrientation />
+          <main
+            className={cn(
+              "flex-1 overflow-y-auto overflow-x-clip py-4 px-page md:p-6 lg:p-8",
+              "pb-mobile-nav",
+              showPwaBanner && "max-lg:pb-[calc(var(--mobile-tab-bar-offset)+7.5rem)]",
+            )}
+          >
+            <div className="mx-auto min-w-0 max-w-6xl">{children}</div>
+          </main>
+          <PwaInstallBanner />
+          <MobileTabBar />
+        </OrientationVisibility>
       </div>
     </div>
   );
