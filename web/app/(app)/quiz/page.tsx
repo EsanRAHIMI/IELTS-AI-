@@ -9,6 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkStatus, workError } from "@/components/ui/work-status";
+import { useHideOrientation } from "@/components/orientation-visibility";
+import { usePwaInstallContext } from "@/components/pwa-install-provider";
 
 interface Question { id: string; prompt: string; options: string[]; correct: string; word: string; }
 
@@ -19,6 +21,7 @@ const MODES = [
 ];
 
 export default function QuizPage() {
+  const { canShow: showPwaBanner } = usePwaInstallContext();
   const [mode, setMode] = useState("meaning");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [idx, setIdx] = useState(0);
@@ -40,7 +43,7 @@ export default function QuizPage() {
       }
       setQuestions(res.questions);
       setIdx(0); setSelected(null); setScore(0); setStarted(true);
-      setNotice({ phase: "success", title: "Quiz ready", detail: `${res.questions.length} questions` });
+      setNotice(null);
     } catch (err) {
       setNotice({ phase: "error", title: "Could not start the quiz", detail: workError(err) });
       setStarted(false);
@@ -58,59 +61,83 @@ export default function QuizPage() {
 
   const current = questions[idx];
   const finished = started && idx >= questions.length;
+  const answering = started && !finished && Boolean(current);
+  useHideOrientation(answering);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4">
-          <Tabs value={mode} onValueChange={setMode} className="w-full">
-            <TabsList>{MODES.map((m) => <TabsTrigger key={m.key} value={m.key}>{m.label}</TabsTrigger>)}</TabsList>
-          </Tabs>
-          <Button className="w-full sm:w-auto sm:self-end" onClick={() => start(mode)} disabled={loading}>{loading ? "Building…" : "New quiz"}</Button>
-          {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} onDismiss={() => setNotice(null)} />}
-        </CardContent>
-      </Card>
+      {!answering && (
+        <Card data-quiz-setup>
+          <CardContent className="flex flex-col gap-3 p-4">
+            <Tabs value={mode} onValueChange={setMode} className="w-full">
+              <TabsList>{MODES.map((m) => <TabsTrigger key={m.key} value={m.key}>{m.label}</TabsTrigger>)}</TabsList>
+            </Tabs>
+            <Button className="w-full sm:w-auto sm:self-end" onClick={() => start(mode)} disabled={loading}>{loading ? "Building…" : "New quiz"}</Button>
+            {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} onDismiss={() => setNotice(null)} />}
+          </CardContent>
+        </Card>
+      )}
 
       {!started && !notice && (
         <Card><CardContent className="p-10 text-center text-muted-foreground">Choose a mode and start a quiz. Questions are generated from your enriched vocabulary.</CardContent></Card>
       )}
 
-      {started && !finished && current && (
-        <motion.div key={current.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-          <Card>
-            <CardContent className="space-y-5 p-6">
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>Question {idx + 1} / {questions.length}</span>
-                <span>Score {score}</span>
-              </div>
-              <p className="text-xl font-semibold">{current.prompt}</p>
-              <div className="grid gap-2">
-                {current.options.map((opt) => {
-                  const isCorrect = opt === current.correct;
-                  const isChosen = opt === selected;
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => choose(opt)}
-                      disabled={!!selected}
-                      className={cn(
-                        "flex items-center justify-between rounded-md border p-3 text-left text-sm transition-colors",
-                        !selected && "hover:bg-secondary",
-                        selected && isCorrect && "border-success bg-success/10",
-                        selected && isChosen && !isCorrect && "border-destructive bg-destructive/10",
-                      )}
-                    >
-                      <span>{opt}</span>
-                      {selected && isCorrect && <CheckCircle2 className="h-5 w-5 text-success" />}
-                      {selected && isChosen && !isCorrect && <XCircle className="h-5 w-5 text-destructive" />}
-                    </button>
-                  );
-                })}
-              </div>
-              {selected && <Button onClick={next} className="w-full">{idx + 1 >= questions.length ? "See results" : "Next question"}</Button>}
-            </CardContent>
-          </Card>
-        </motion.div>
+      {answering && current && (
+        <div
+          data-quiz-question
+          className={cn(
+            "max-lg:fixed max-lg:inset-x-0 max-lg:z-20 max-lg:flex max-lg:flex-col max-lg:bg-background max-lg:px-page max-lg:pb-3 max-lg:pt-3",
+            "max-lg:top-[var(--app-topbar-height)]",
+            showPwaBanner
+              ? "max-lg:bottom-[calc(5.25rem+max(1rem,var(--safe-bottom))+7.5rem)]"
+              : "max-lg:bottom-[calc(5.25rem+max(1rem,var(--safe-bottom)))]",
+          )}
+        >
+          <motion.div
+            key={current.id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <Card className="flex min-h-0 flex-1 flex-col">
+              <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:gap-5 sm:p-6">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Question {idx + 1} / {questions.length}</span>
+                  <span>Score {score}</span>
+                </div>
+                <p className="text-xl font-semibold">{current.prompt}</p>
+                <div className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto">
+                  {current.options.map((opt) => {
+                    const isCorrect = opt === current.correct;
+                    const isChosen = opt === selected;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => choose(opt)}
+                        disabled={!!selected}
+                        className={cn(
+                          "flex items-center justify-between gap-3 rounded-md border p-3 text-left text-sm transition-colors",
+                          !selected && "hover:bg-secondary",
+                          selected && isCorrect && "border-success bg-success/10",
+                          selected && isChosen && !isCorrect && "border-destructive bg-destructive/10",
+                        )}
+                      >
+                        <span>{opt}</span>
+                        {selected && isCorrect && <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />}
+                        {selected && isChosen && !isCorrect && <XCircle className="h-5 w-5 shrink-0 text-destructive" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selected && (
+                  <Button data-quiz-next onClick={next} className="w-full shrink-0">
+                    {idx + 1 >= questions.length ? "See results" : "Next question"}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
       )}
 
       {finished && (

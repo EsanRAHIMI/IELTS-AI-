@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { useOrientationHidden } from "@/components/orientation-visibility";
 
 type PrepStep = {
   stage: string;
@@ -80,6 +81,9 @@ export function PrepOrientation() {
   );
   const action = step?.action ?? (failed ? "Open home" : "");
   const href = step?.href ?? "/dashboard";
+  const hidden = useOrientationHidden();
+
+  if (hidden) return null;
 
   return (
     <section
