@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, Query
 
 import database as db
 from auth.dependencies import current_user_id, get_current_user
+from progress.orientation import prep_orientation
 from utils.serialization import now
+
+QUIZ_READY_COUNT = 4
 
 router = APIRouter(tags=["progress"])
 
@@ -100,3 +103,28 @@ async def progress(uid: str = Depends(current_user_id), days: int = Query(30, ge
         "statusDistribution": status_dist,
         "sourceCoverage": coverage,
     }
+
+
+@router.get("/orientation")
+async def orientation(uid: str = Depends(current_user_id)):
+    """Current prep stage and the one next step, from stored counts."""
+    visible = {"userId": uid, "hidden": {"$ne": True}}
+    due = {"userId": uid, "nextReviewAt": {"$lte": now()}}
+    sources = await db.sources().count_documents({"userId": uid})
+    words = await db.vocab().count_documents(visible)
+    phrases = await db.phrases().count_documents(visible)
+    patterns = await db.patterns().count_documents(visible)
+    cards = await db.cards().count_documents({"userId": uid})
+    due_study = await db.cards().count_documents({**due, "status": {"$in": ["new", "learning"]}})
+    due_review = await db.cards().count_documents({**due, "status": {"$in": ["review", "mastered"]}})
+    enriched = await db.vocab().count_documents({**visible, "simpleEnglishMeaning": {"$ne": ""}})
+    return prep_orientation(
+        sources=sources,
+        words=words,
+        phrases=phrases,
+        patterns=patterns,
+        cards=cards,
+        due_study=due_study,
+        due_review=due_review,
+        quiz_ready=enriched >= QUIZ_READY_COUNT,
+    )
