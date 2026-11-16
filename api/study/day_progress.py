@@ -39,6 +39,16 @@ def hidden_source(card: dict, hidden_refs: set[tuple[str, str]]) -> bool:
     return (card.get("type"), str(card.get("refId") or "")) in hidden_refs
 
 
+def session_for_reload(card_ids: list | None) -> tuple[list[str], list[str]]:
+    """Bring a finished queue back. Reported cards are already gone from the list."""
+    kept: list[str] = []
+    for item in card_ids or []:
+        sid = str(item)
+        if sid and sid not in kept:
+            kept.append(sid)
+    return kept, []
+
+
 def remaining_ids(card_ids: list | None, reviewed_ids: list | None) -> list[str]:
     reviewed = {str(item) for item in (reviewed_ids or [])}
     remaining: list[str] = []
