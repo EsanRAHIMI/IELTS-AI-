@@ -18,6 +18,7 @@ from study.day_progress import (
     hidden_source,
     mark_reviewed,
     remaining_ids,
+    session_for_reload,
     session_without_card,
     today_key,
 )
@@ -127,11 +128,27 @@ async def _due_card_ids(uid: str, limit: int) -> list[str]:
 
 
 @router.get("/queue")
-async def review_queue(uid: str = Depends(current_user_id), limit: int = Query(40, ge=1, le=100)):
-    """Today's remaining cards, in the order the session started."""
+async def review_queue(
+    uid: str = Depends(current_user_id),
+    limit: int = Query(40, ge=1, le=100),
+    restart: bool = Query(False),
+):
+    """Today's remaining cards, in the order the session started.
+
+    ``restart`` is the Reload queue button: the same cards come back from the
+    start. A normal refresh does not pass it, so finished cards stay finished.
+    """
     capped = clamp_limit(limit, default=40, maximum=100)
     session = await db.study_progress().find_one({"_id": f"{uid}:{now().date().isoformat()}"})
-    if not session or not session.get("cardIds"):
+    if restart and session and session.get("cardIds"):
+        card_ids, reviewed_ids = session_for_reload(session.get("cardIds"))
+        await db.study_progress().update_one(
+            {"_id": session["_id"]},
+            {"$set": {"cardIds": card_ids, "reviewedIds": reviewed_ids}},
+        )
+        session["cardIds"] = card_ids
+        session["reviewedIds"] = reviewed_ids
+    elif not session or not session.get("cardIds"):
         session = await ensure_session(uid, await _due_card_ids(uid, capped))
     wanted = remaining_ids(session.get("cardIds"), session.get("reviewedIds"))
     found: dict = {}

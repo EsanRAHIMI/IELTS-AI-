@@ -72,19 +72,28 @@ export default function StudyPage() {
   const [translateError, setTranslateError] = useState("");
   const toastTimer = useRef<number | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (restart = false) => {
     setLoading(true);
-    const res = await api<{ items: CardType[]; totalDue: number; reviewedToday?: number }>("/study/queue", { query: { limit: 40 } });
-    setQueue(res.items);
-    setIdx(0);
-    setReached(0);
-    setGrades({});
-    setRevealed(false);
-    setReviewed(res.reviewedToday || 0);
-    setLoading(false);
+    try {
+      const res = await api<{ items: CardType[]; totalDue: number; reviewedToday?: number }>("/study/queue", {
+        query: { limit: 40, restart: restart ? 1 : undefined },
+      });
+      setQueue(res.items);
+      setIdx(0);
+      setReached(0);
+      setGrades({});
+      setRevealed(false);
+      setReviewed(res.reviewedToday || 0);
+    } catch (err) {
+      setToast({ text: workError(err, "Could not reload the queue"), tone: "error" });
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+      toastTimer.current = window.setTimeout(() => setToast(null), 2800);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(false); }, [load]);
 
   const current = queue[idx];
 
@@ -249,6 +258,7 @@ export default function StudyPage() {
   const swipe = useRef<{ x: number; y: number } | null>(null);
   function onPointerDown(e: PointerEvent) {
     if (e.button !== 0) return;
+    if (e.target instanceof Element && e.target.closest("button, a")) return;
     swipe.current = { x: e.clientX, y: e.clientY };
   }
   function onPointerUp(e: PointerEvent) {
@@ -326,7 +336,7 @@ export default function StudyPage() {
             {reviewed ? `You reviewed ${reviewed} card${reviewed === 1 ? "" : "s"}. Great work.` : "Add items to study from the Vocabulary, Phrases or Patterns pages, or check back later."}
           </p>
           <div className="flex gap-3">
-            <Button onClick={load} className="gap-2"><RotateCcw className="h-4 w-4" /> Reload queue</Button>
+            <Button type="button" onClick={() => { void load(true); }} className="gap-2"><RotateCcw className="h-4 w-4" /> Reload queue</Button>
             <Link href="/vocabulary"><Button variant="outline">Add cards</Button></Link>
           </div>
         </div>
