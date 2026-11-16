@@ -49,6 +49,79 @@ def session_for_reload(card_ids: list | None) -> tuple[list[str], list[str]]:
     return kept, []
 
 
+def _dedupe(card_ids: list | None) -> list[str]:
+    kept: list[str] = []
+    for item in card_ids or []:
+        sid = str(item)
+        if sid and sid not in kept:
+            kept.append(sid)
+    return kept
+
+
+def session_index(card_ids: list | None, reviewed_ids: list | None, current_card_id: str | None, at_end: bool) -> int:
+    """Where the learner was in today's list.
+
+    A saved card wins. Otherwise the first card that is still due. ``at_end``
+    keeps the finished screen instead of jumping back to the first card.
+    """
+    ids = _dedupe(card_ids)
+    if at_end:
+        return len(ids)
+    current = str(current_card_id or "")
+    if current and current in ids:
+        return ids.index(current)
+    reviewed = {str(item) for item in (reviewed_ids or [])}
+    for index, sid in enumerate(ids):
+        if sid not in reviewed:
+            return index
+    return len(ids)
+
+
+def session_frontier(card_ids: list | None, reviewed_ids: list | None) -> int:
+    """The first card not yet reviewed, which is as far as they can step forward."""
+    ids = _dedupe(card_ids)
+    reviewed = {str(item) for item in (reviewed_ids or [])}
+    for index, sid in enumerate(ids):
+        if sid not in reviewed:
+            return index
+    return len(ids)
+
+
+def place_after_removal(
+    card_ids: list | None,
+    current_card_id: str | None,
+    at_end: bool,
+    removed_id: str,
+) -> tuple[str | None, bool]:
+    """Keep the place when a reported card disappears."""
+    ids = _dedupe(card_ids)
+    if at_end:
+        return None, True
+    current = str(current_card_id or "")
+    removed = str(removed_id)
+    if current != removed:
+        return (current or None), False
+    if removed not in ids:
+        return None, False
+    index = ids.index(removed)
+    kept = [sid for sid in ids if sid != removed]
+    if index >= len(kept):
+        return None, True
+    return kept[index], False
+
+
+def grades_for_session(reviews: list | None, reviewed_ids: list | None) -> dict[str, str]:
+    """Latest grade today for cards still marked reviewed in this session."""
+    allowed = {str(item) for item in (reviewed_ids or [])}
+    grades: dict[str, str] = {}
+    for rev in reviews or []:
+        cid = str(rev.get("cardId") or "")
+        grade = rev.get("grade")
+        if cid in allowed and grade in ("again", "hard", "good", "easy"):
+            grades[cid] = grade
+    return grades
+
+
 def remaining_ids(card_ids: list | None, reviewed_ids: list | None) -> list[str]:
     reviewed = {str(item) for item in (reviewed_ids or [])}
     remaining: list[str] = []

@@ -1,6 +1,7 @@
 """Study system: flashcards, review queue, daily plan, quiz."""
 from __future__ import annotations
 import random
+from datetime import datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -15,13 +16,18 @@ from quotas import consume_ai_call
 from study import sm2
 from study.day_progress import (
     ensure_session,
+    grades_for_session,
     hidden_source,
     mark_reviewed,
+    place_after_removal,
     remaining_ids,
     session_for_reload,
+    session_frontier,
+    session_index,
     session_without_card,
     today_key,
 )
+from study.quiz_session import MODES, clean_questions, quiz_progress, resumable
 from study.plan import focus_query, focus_skill_tokens, plan_sizes
 from study.translate import LANGUAGES, card_source_text, normalize_language, normalize_translation, stored_translation
 
@@ -144,27 +150,85 @@ async def review_queue(
         card_ids, reviewed_ids = session_for_reload(session.get("cardIds"))
         await db.study_progress().update_one(
             {"_id": session["_id"]},
-            {"$set": {"cardIds": card_ids, "reviewedIds": reviewed_ids}},
+            {"$set": {
+                "cardIds": card_ids,
+                "reviewedIds": reviewed_ids,
+                "currentCardId": None,
+                "atEnd": False,
+            }},
         )
         session["cardIds"] = card_ids
         session["reviewedIds"] = reviewed_ids
+        session["currentCardId"] = None
+        session["atEnd"] = False
     elif not session or not session.get("cardIds"):
         session = await ensure_session(uid, await _due_card_ids(uid, capped))
-    wanted = remaining_ids(session.get("cardIds"), session.get("reviewedIds"))
+    order: list[str] = []
+    for card_id in session.get("cardIds") or []:
+        sid = str(card_id)
+        if sid and sid not in order:
+            order.append(sid)
     found: dict = {}
-    ids = [oid(card_id) for card_id in wanted if is_oid(card_id)]
+    ids = [oid(card_id) for card_id in order if is_oid(card_id)]
     if ids:
         async for doc in db.cards().find({"_id": {"$in": ids}, "userId": uid}):
             found[str(doc["_id"])] = doc
-    loaded = [found[card_id] for card_id in wanted if card_id in found]
+    loaded = [found[card_id] for card_id in order if card_id in found]
     hidden = await _hidden_refs(uid, loaded)
     visible = [card for card in loaded if not hidden_source(card, hidden)]
+    visible_ids = [str(card["_id"]) for card in visible]
+    index = session_index(
+        visible_ids,
+        session.get("reviewedIds"),
+        session.get("currentCardId"),
+        bool(session.get("atEnd")),
+    )
+    frontier = session_frontier(visible_ids, session.get("reviewedIds"))
+    grades = grades_for_session(
+        await _today_reviews(uid, visible_ids),
+        session.get("reviewedIds"),
+    )
     items = [serialize(card) for card in visible]
     return {
         "items": items,
-        "totalDue": len(items),
+        "totalDue": len(remaining_ids(visible_ids, session.get("reviewedIds"))),
         "reviewedToday": len(session.get("reviewedIds") or []),
+        "index": index,
+        "reached": max(index, frontier),
+        "grades": grades,
     }
+
+
+class SessionPlace(BaseModel):
+    cardId: str | None = None
+    atEnd: bool = False
+
+
+@router.post("/session/place")
+async def save_place(body: SessionPlace, uid: str = Depends(current_user_id)):
+    """Remember the card on screen. A reload must not jump back to the start."""
+    session = await db.study_progress().find_one({"_id": today_key(uid)})
+    if not session:
+        return {"ok": True}
+    ids = {str(card_id) for card_id in (session.get("cardIds") or [])}
+    if body.atEnd:
+        update = {"currentCardId": None, "atEnd": True}
+    elif body.cardId and str(body.cardId) in ids:
+        update = {"currentCardId": str(body.cardId), "atEnd": False}
+    else:
+        return {"ok": True}
+    await db.study_progress().update_one({"_id": session["_id"]}, {"$set": update})
+    return {"ok": True}
+
+
+async def _today_reviews(uid: str, card_ids: list[str]) -> list[dict]:
+    if not card_ids:
+        return []
+    start = datetime.combine(now().date(), time.min, tzinfo=timezone.utc)
+    cursor = db.reviews().find(
+        {"userId": uid, "cardId": {"$in": card_ids}, "reviewedAt": {"$gte": start}},
+    ).sort("reviewedAt", 1)
+    return [doc async for doc in cursor]
 
 
 class ReviewBody(BaseModel):
@@ -213,12 +277,23 @@ async def report_card(card_id: str, uid: str = Depends(current_user_id)):
     await db.cards().delete_one({"_id": card["_id"], "userId": uid})
     session = await db.study_progress().find_one({"_id": today_key(uid)})
     if session:
+        current_card_id, at_end = place_after_removal(
+            session.get("cardIds"),
+            session.get("currentCardId"),
+            bool(session.get("atEnd")),
+            card_id,
+        )
         card_ids, reviewed_ids = session_without_card(
             session.get("cardIds"), session.get("reviewedIds"), card_id,
         )
         await db.study_progress().update_one(
             {"_id": session["_id"]},
-            {"$set": {"cardIds": card_ids, "reviewedIds": reviewed_ids}},
+            {"$set": {
+                "cardIds": card_ids,
+                "reviewedIds": reviewed_ids,
+                "currentCardId": current_card_id,
+                "atEnd": at_end,
+            }},
         )
     return {"ok": True}
 
@@ -335,3 +410,86 @@ async def quiz(
             "word": item["word"],
         })
     return {"mode": mode, "questions": questions}
+
+
+class QuizAnswerIn(BaseModel):
+    questionId: str
+    choice: str
+
+
+class QuizStartIn(BaseModel):
+    mode: str
+    questions: list[dict]
+
+
+class QuizProgressIn(BaseModel):
+    index: int = Field(ge=0, le=20)
+    answers: list[QuizAnswerIn] = []
+
+
+def _quiz_view(doc: dict | None) -> dict:
+    saved = resumable(doc)
+    if not saved:
+        return {"mode": None, "questions": [], "index": 0, "answers": [], "score": 0}
+    return saved
+
+
+@router.get("/quiz/session")
+async def read_quiz_session(uid: str = Depends(current_user_id)):
+    doc = await db.quiz_progress().find_one({"_id": uid})
+    return _quiz_view(doc)
+
+
+@router.post("/quiz/session")
+async def start_quiz_session(body: QuizStartIn, uid: str = Depends(current_user_id)):
+    """Replace any unfinished quiz. Starting a new one is explicit."""
+    if body.mode not in MODES:
+        raise HTTPException(400, "Invalid quiz type")
+    questions = clean_questions(body.questions)
+    if not questions:
+        raise HTTPException(400, "A quiz needs at least one question")
+    doc = {
+        "_id": uid,
+        "userId": uid,
+        "mode": body.mode,
+        "questions": questions,
+        "index": 0,
+        "answers": [],
+        "score": 0,
+        "updatedAt": now(),
+        "expiresAt": now() + timedelta(days=3),
+    }
+    await db.quiz_progress().replace_one({"_id": uid}, doc, upsert=True)
+    return _quiz_view(doc)
+
+
+@router.put("/quiz/session")
+async def save_quiz_session(body: QuizProgressIn, uid: str = Depends(current_user_id)):
+    doc = await db.quiz_progress().find_one({"_id": uid})
+    if not doc:
+        raise HTTPException(404, "No quiz in progress")
+    questions = clean_questions(doc.get("questions"))
+    progress = quiz_progress(
+        questions,
+        body.index,
+        [answer.model_dump() for answer in body.answers],
+    )
+    if progress["index"] >= len(questions):
+        await db.quiz_progress().delete_one({"_id": uid})
+        return {"mode": None, "questions": [], "index": 0, "answers": [], "score": progress["score"]}
+    await db.quiz_progress().update_one(
+        {"_id": uid},
+        {"$set": {
+            **progress,
+            "updatedAt": now(),
+            "expiresAt": now() + timedelta(days=3),
+        }},
+    )
+    doc.update(progress)
+    return _quiz_view(doc)
+
+
+@router.delete("/quiz/session")
+async def clear_quiz_session(uid: str = Depends(current_user_id)):
+    await db.quiz_progress().delete_one({"_id": uid})
+    return {"ok": True}

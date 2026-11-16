@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, XCircle, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api";
@@ -13,6 +13,14 @@ import { useHideOrientation } from "@/components/orientation-visibility";
 import { usePwaInstallContext } from "@/components/pwa-install-provider";
 
 interface Question { id: string; prompt: string; options: string[]; correct: string; word: string; }
+interface QuizAnswer { questionId: string; choice: string; }
+interface SavedQuiz {
+  mode: string | null;
+  questions: Question[];
+  index: number;
+  answers: QuizAnswer[];
+  score: number;
+}
 
 const MODES = [
   { key: "meaning", label: "Meaning" },
@@ -27,11 +35,47 @@ export default function QuizPage() {
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [score, setScore] = useState(0);
+  const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(true);
   const [notice, setNotice] = useState<{ phase: "progress" | "success" | "error"; title: string; detail?: string } | null>(null);
+  const ignoreResume = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<SavedQuiz>("/study/quiz/session")
+      .then((saved) => {
+        if (cancelled || ignoreResume.current || !saved?.questions?.length) return;
+        if (saved.index >= saved.questions.length) return;
+        const open = saved.questions[saved.index];
+        const prior = (saved.answers || []).find((answer) => answer.questionId === open?.id);
+        setMode(saved.mode || "meaning");
+        setQuestions(saved.questions);
+        setAnswers(saved.answers || []);
+        setIdx(saved.index || 0);
+        setScore(saved.score || 0);
+        setSelected(prior?.choice ?? null);
+        setStarted(true);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setRestoring(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function remember(index: number, nextAnswers: QuizAnswer[]) {
+    void api("/study/quiz/session", {
+      method: "PUT",
+      body: { index, answers: nextAnswers },
+    }).catch(() => {});
+  }
 
   async function start(m: string) {
+    ignoreResume.current = true;
     setLoading(true);
     setNotice({ phase: "progress", title: "Building your quiz" });
     try {
@@ -41,7 +85,9 @@ export default function QuizPage() {
         setStarted(false);
         return;
       }
+      await api("/study/quiz/session", { method: "POST", body: { mode: m, questions: res.questions } });
       setQuestions(res.questions);
+      setAnswers([]);
       setIdx(0); setSelected(null); setScore(0); setStarted(true);
       setNotice(null);
     } catch (err) {
@@ -53,16 +99,38 @@ export default function QuizPage() {
   }
 
   function choose(opt: string) {
-    if (selected) return;
+    if (selected || !questions[idx]) return;
+    const question = questions[idx];
+    const nextAnswers = answers.filter((answer) => answer.questionId !== question.id);
+    nextAnswers.push({ questionId: question.id, choice: opt });
+    const nextScore = questions.reduce((total, item) => (
+      total + (nextAnswers.some((answer) => answer.questionId === item.id && answer.choice === item.correct) ? 1 : 0)
+    ), 0);
     setSelected(opt);
-    if (opt === questions[idx].correct) setScore((s) => s + 1);
+    setAnswers(nextAnswers);
+    setScore(nextScore);
+    remember(idx, nextAnswers);
   }
-  function next() { setSelected(null); setIdx((i) => i + 1); }
+  function next() {
+    const following = idx + 1;
+    setSelected(null);
+    if (following >= questions.length) {
+      setIdx(following);
+      void api("/study/quiz/session", { method: "DELETE" }).catch(() => {});
+      return;
+    }
+    setIdx(following);
+    remember(following, answers);
+  }
 
   const current = questions[idx];
   const finished = started && idx >= questions.length;
   const answering = started && !finished && Boolean(current);
-  useHideOrientation(answering);
+  useHideOrientation(restoring || answering);
+
+  if (restoring) {
+    return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading quiz…</div>;
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
