@@ -1,5 +1,15 @@
 """A refresh keeps today's remaining study cards instead of restarting the session."""
-from study.day_progress import hidden_source, remaining_ids, session_for_reload, session_without_card, today_key
+from study.day_progress import (
+    grades_for_session,
+    hidden_source,
+    place_after_removal,
+    remaining_ids,
+    session_for_reload,
+    session_frontier,
+    session_index,
+    session_without_card,
+    today_key,
+)
 
 
 def test_reviewed_cards_are_left_out_of_the_session():
@@ -29,6 +39,39 @@ def test_reload_after_finishing_returns_the_same_cards():
     cards, reviewed = session_for_reload(["a", "b", "a", "c"])
     assert cards == ["a", "b", "c"]
     assert remaining_ids(cards, reviewed) == ["a", "b", "c"]
+
+
+def test_refresh_returns_to_the_card_they_had_open():
+    cards = ["a", "b", "c", "d"]
+    reviewed = ["a"]
+    assert session_index(cards, reviewed, "a", False) == 0
+    assert session_frontier(cards, reviewed) == 1
+    assert session_index(cards, reviewed, None, False) == 1
+
+
+def test_finished_session_stays_on_the_end_screen():
+    cards = ["a", "b"]
+    assert session_index(cards, cards, None, True) == 2
+    assert session_frontier(cards, cards) == 2
+
+
+def test_missing_place_does_not_restart_a_half_reviewed_queue():
+    assert session_index(["a", "b", "c"], ["a", "b"], None, False) == 2
+
+
+def test_reported_open_card_lands_on_the_next_one():
+    assert place_after_removal(["a", "b", "c"], "b", False, "b") == ("c", False)
+    assert place_after_removal(["a", "b", "c"], "c", False, "c") == (None, True)
+    assert place_after_removal(["a", "b", "c"], "a", False, "b") == ("a", False)
+
+
+def test_grades_follow_the_cards_still_in_this_session():
+    reviews = [
+        {"cardId": "a", "grade": "hard"},
+        {"cardId": "a", "grade": "good"},
+        {"cardId": "b", "grade": "again"},
+    ]
+    assert grades_for_session(reviews, ["a"]) == {"a": "good"}
 
 
 def test_progress_key_is_per_user_and_day():

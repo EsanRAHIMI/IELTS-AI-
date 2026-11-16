@@ -71,19 +71,31 @@ export default function StudyPage() {
   const [translating, setTranslating] = useState(false);
   const [translateError, setTranslateError] = useState("");
   const toastTimer = useRef<number | null>(null);
+  const acceptPlace = useRef(false);
 
   const load = useCallback(async (restart = false) => {
+    acceptPlace.current = false;
     setLoading(true);
     try {
-      const res = await api<{ items: CardType[]; totalDue: number; reviewedToday?: number }>("/study/queue", {
+      const res = await api<{
+        items: CardType[];
+        totalDue: number;
+        reviewedToday?: number;
+        index?: number;
+        reached?: number;
+        grades?: Record<string, string>;
+      }>("/study/queue", {
         query: { limit: 40, restart: restart ? 1 : undefined },
       });
+      const index = Math.max(0, Math.min(res.index ?? 0, res.items.length));
+      const frontier = Math.max(index, Math.min(res.reached ?? index, res.items.length));
       setQueue(res.items);
-      setIdx(0);
-      setReached(0);
-      setGrades({});
+      setIdx(index);
+      setReached(frontier);
+      setGrades(res.grades || {});
       setRevealed(false);
       setReviewed(res.reviewedToday || 0);
+      acceptPlace.current = true;
     } catch (err) {
       setToast({ text: workError(err, "Could not reload the queue"), tone: "error" });
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
@@ -94,6 +106,13 @@ export default function StudyPage() {
   }, []);
 
   useEffect(() => { void load(false); }, [load]);
+
+  useEffect(() => {
+    if (!acceptPlace.current) return;
+    const cardId = queue[idx]?.id ?? null;
+    const atEnd = queue.length > 0 && idx >= queue.length;
+    void api("/study/session/place", { method: "POST", body: { cardId, atEnd } }).catch(() => {});
+  }, [idx, queue]);
 
   const current = queue[idx];
 
