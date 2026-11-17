@@ -273,7 +273,7 @@ export default function StudyPage() {
         if (!state.revealed) state.reveal();
         return;
       }
-      if ((!state.revealed && !state.graded && !state.quickReview) || e.repeat) return;
+      if (e.repeat) return;
       const choice = gradeFromEvent(e);
       if (!choice) return;
       e.preventDefault();
@@ -372,8 +372,7 @@ export default function StudyPage() {
     );
   }
 
-  const showGrades = Boolean(revealed || chosenGrade || quickReview);
-  const glassyGrades = quickReview && !revealed;
+  const glassyGrades = !revealed;
   const belowTabs = showPwaBanner ? "calc(12.25rem + max(1rem, var(--safe-bottom)))" : TAB_CLEARANCE;
   const belowGrades = showPwaBanner ? "calc(15.5rem + max(1rem, var(--safe-bottom)))" : GRADE_CLEARANCE;
 
@@ -382,7 +381,7 @@ export default function StudyPage() {
     <div
       data-study-card
       className="fixed inset-x-0 top-[var(--app-topbar-height)] z-20 flex flex-col bg-background lg:left-64"
-      style={{ bottom: showGrades ? belowGrades : belowTabs }}
+      style={{ bottom: belowGrades }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={() => { swipe.current = null; }}
@@ -481,8 +480,7 @@ export default function StudyPage() {
 
       </div>
     </div>
-    {showGrades && (
-      <div
+    <div
         data-study-grades
         data-grade-style={glassyGrades ? "glass" : "solid"}
         className={cn(
@@ -519,7 +517,6 @@ export default function StudyPage() {
           })}
         </div>
       </div>
-    )}
     </>
   );
 }
