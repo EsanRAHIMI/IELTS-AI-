@@ -89,6 +89,7 @@ def present_source(doc: dict, *, preview: bool) -> dict:
     for key in ("s3Key", "s3Bucket", "s3Url"):
         data.pop(key, None)
     data["hasFile"] = has_file
+    data["frozen"] = bool(doc.get("frozen"))
     return data
 
 
@@ -294,6 +295,21 @@ async def delete_impact(source_id: str, uid: str = Depends(current_user_id)):
 async def get_source(source_id: str, uid: str = Depends(current_user_id)):
     doc = await _get_owned_source(source_id, uid)
     return present_source(doc, preview=True)
+
+
+class FreezeBody(BaseModel):
+    frozen: bool
+
+
+@router.patch("/{source_id}/freeze")
+async def set_source_frozen(source_id: str, body: FreezeBody, uid: str = Depends(current_user_id)):
+    """Set a source aside, or bring it back. Does not reprocess or delete it."""
+    await _get_owned_source(source_id, uid)
+    await db.sources().update_one(
+        {"_id": oid(source_id), "userId": uid},
+        {"$set": {"frozen": bool(body.frozen), "updatedAt": now()}},
+    )
+    return {"id": source_id, "frozen": bool(body.frozen)}
 
 
 @router.get("/{source_id}/download-url")
