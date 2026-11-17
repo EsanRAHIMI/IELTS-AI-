@@ -8,6 +8,7 @@ import database as db
 from auth.dependencies import current_user_id, get_current_user
 from progress.home import library_progress, listed_sources
 from progress.orientation import prep_orientation
+from sources.freeze import active_item_query, frozen_source_ids, studyable_card_stats
 from utils.serialization import now
 
 QUIZ_READY_COUNT = 4
@@ -37,21 +38,19 @@ async def _streak(uid: str) -> int:
 @router.get("/dashboard")
 async def dashboard(user: dict = Depends(get_current_user)):
     uid = user["id"]
-    base = {"userId": uid, "hidden": {"$ne": True}}
-    total_sources = await db.sources().count_documents({"userId": uid})
+    frozen = await frozen_source_ids(uid)
+    base = {"userId": uid, "hidden": {"$ne": True}, **active_item_query(frozen)}
+    total_sources = await db.sources().count_documents({"userId": uid, "frozen": {"$ne": True}})
     total_words = await db.vocab().count_documents(base)
     total_phrases = await db.phrases().count_documents(base)
     total_patterns = await db.patterns().count_documents(base)
-    due_today = await db.cards().count_documents({"userId": uid, "nextReviewAt": {"$lte": now()}})
-    status_counts: dict[str, int] = {}
-    async for row in db.cards().aggregate([
-        {"$match": {"userId": uid}},
-        {"$group": {"_id": "$status", "n": {"$sum": 1}}},
-    ]):
-        status_counts[str(row.get("_id") or "new")] = int(row.get("n") or 0)
-    cards = library_progress(status_counts, due_today)
+    stats = await studyable_card_stats(uid)
+    cards = library_progress(stats, stats["due"])
     titles = []
-    async for source in db.sources().find({"userId": uid}, {"title": 1}).sort("createdAt", -1):
+    async for source in db.sources().find(
+        {"userId": uid, "frozen": {"$ne": True}},
+        {"title": 1},
+    ).sort("createdAt", -1):
         titles.append(source.get("title"))
     shown_sources, more_sources = listed_sources(titles)
     streak = await _streak(uid)
@@ -95,14 +94,16 @@ async def progress(uid: str = Depends(current_user_id), days: int = Query(30, ge
     total_correct = sum(b["correct"] for b in timeline)
     accuracy = round(100 * total_correct / total_reviews) if total_reviews else 0
 
-    # status distribution
-    status_dist = {}
-    for st in ("new", "learning", "review", "mastered"):
-        status_dist[st] = await db.cards().count_documents({"userId": uid, "status": st})
+    # status distribution, excluding cards set aside with a frozen source
+    card_stats = await studyable_card_stats(uid)
+    status_dist = {st: card_stats[st] for st in ("new", "learning", "review", "mastered")}
 
     # source coverage
     coverage = []
-    cur = db.sources().find({"userId": uid}, {"title": 1, "stats": 1}).sort("createdAt", -1).limit(15)
+    cur = db.sources().find(
+        {"userId": uid, "frozen": {"$ne": True}},
+        {"title": 1, "stats": 1},
+    ).sort("createdAt", -1).limit(15)
     async for s in cur:
         stats = s.get("stats", {})
         coverage.append({
@@ -123,15 +124,16 @@ async def progress(uid: str = Depends(current_user_id), days: int = Query(30, ge
 @router.get("/orientation")
 async def orientation(uid: str = Depends(current_user_id)):
     """Current prep stage and the one next step, from stored counts."""
-    visible = {"userId": uid, "hidden": {"$ne": True}}
-    due = {"userId": uid, "nextReviewAt": {"$lte": now()}}
-    sources = await db.sources().count_documents({"userId": uid})
+    frozen = await frozen_source_ids(uid)
+    visible = {"userId": uid, "hidden": {"$ne": True}, **active_item_query(frozen)}
+    sources = await db.sources().count_documents({"userId": uid, "frozen": {"$ne": True}})
     words = await db.vocab().count_documents(visible)
     phrases = await db.phrases().count_documents(visible)
     patterns = await db.patterns().count_documents(visible)
-    cards = await db.cards().count_documents({"userId": uid})
-    due_study = await db.cards().count_documents({**due, "status": {"$in": ["new", "learning"]}})
-    due_review = await db.cards().count_documents({**due, "status": {"$in": ["review", "mastered"]}})
+    stats = await studyable_card_stats(uid)
+    cards = stats["new"] + stats["learning"] + stats["review"] + stats["mastered"]
+    due_study = stats["due_study"]
+    due_review = stats["due_review"]
     enriched = await db.vocab().count_documents({**visible, "simpleEnglishMeaning": {"$ne": ""}})
     return prep_orientation(
         sources=sources,

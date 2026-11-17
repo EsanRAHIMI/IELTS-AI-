@@ -30,6 +30,15 @@ from study.day_progress import (
 from study.quiz_session import MODES, clean_questions, quiz_progress, resumable
 from study.plan import focus_query, focus_skill_tokens, plan_sizes
 from study.translate import LANGUAGES, card_source_text, normalize_language, normalize_translation, stored_translation
+from sources.freeze import (
+    active_item_query,
+    frozen_ref_pairs,
+    frozen_source_ids,
+    index_in_full,
+    item_is_frozen,
+    studyable_card_stats,
+    without_frozen_questions,
+)
 
 router = APIRouter(prefix="/study", tags=["study"])
 
@@ -86,7 +95,7 @@ async def add_card(body: AddCard, uid: str = Depends(current_user_id)):
         raise HTTPException(400, "Invalid refId")
     col = _TYPE_COL[body.type]()
     item = await col.find_one({"_id": oid(body.refId), "userId": uid})
-    if not item or item.get("hidden"):
+    if not item or item.get("hidden") or item_is_frozen(item.get("sourceIds"), await frozen_source_ids(uid)):
         raise HTTPException(404, "Item not found")
     existing = await db.cards().find_one({"userId": uid, "type": body.type, "refId": body.refId})
     if existing:
@@ -106,8 +115,17 @@ async def list_cards(
     q: dict = {"userId": uid}
     if status:
         q["status"] = status
-    cur = db.cards().find(q).sort("nextReviewAt", 1).limit(clamp_limit(limit, default=100, maximum=100))
-    return {"items": [serialize(d) async for d in cur]}
+    blocked = await frozen_ref_pairs(uid)
+    cap = clamp_limit(limit, default=100, maximum=100)
+    cur = db.cards().find(q).sort("nextReviewAt", 1)
+    items = []
+    async for doc in cur:
+        if (doc.get("type"), str(doc.get("refId") or "")) in blocked:
+            continue
+        items.append(serialize(doc))
+        if len(items) >= cap:
+            break
+    return {"items": items}
 
 
 async def _hidden_refs(uid: str, cards: list[dict]) -> set[tuple[str, str]]:
@@ -128,9 +146,17 @@ async def _hidden_refs(uid: str, cards: list[dict]) -> set[tuple[str, str]]:
 
 
 async def _due_card_ids(uid: str, limit: int) -> list[str]:
+    blocked = await frozen_ref_pairs(uid)
     q = {"userId": uid, "nextReviewAt": {"$lte": now()}}
-    cur = db.cards().find(q, {"_id": 1}).sort([("status", 1), ("nextReviewAt", 1)]).limit(limit)
-    return [str(doc["_id"]) async for doc in cur]
+    cur = db.cards().find(q, {"_id": 1, "type": 1, "refId": 1}).sort([("status", 1), ("nextReviewAt", 1)])
+    ids: list[str] = []
+    async for doc in cur:
+        if (doc.get("type"), str(doc.get("refId") or "")) in blocked:
+            continue
+        ids.append(str(doc["_id"]))
+        if len(ids) >= limit:
+            break
+    return ids
 
 
 @router.get("/queue")
@@ -180,13 +206,33 @@ async def review_queue(
             found[str(doc["_id"])] = doc
     loaded = [found[card_id] for card_id in order if card_id in found]
     hidden = await _hidden_refs(uid, loaded)
+    hidden |= await frozen_ref_pairs(uid)
     visible = [card for card in loaded if not hidden_source(card, hidden)]
+    arrivals: list[str] = []
+    if len(visible) < capped:
+        present = {str(card["_id"]) for card in visible}
+        for card_id in await _due_card_ids(uid, capped):
+            if card_id in present or card_id in order:
+                continue
+            arrivals.append(card_id)
+            if len(visible) + len(arrivals) >= capped:
+                break
+    if arrivals:
+        arrival_ids = [oid(card_id) for card_id in arrivals if is_oid(card_id)]
+        found_arrivals: dict = {}
+        if arrival_ids:
+            async for doc in db.cards().find({"_id": {"$in": arrival_ids}, "userId": uid}):
+                found_arrivals[str(doc["_id"])] = doc
+        for card_id in arrivals:
+            doc = found_arrivals.get(card_id)
+            if doc:
+                visible.append(doc)
     visible_ids = [str(card["_id"]) for card in visible]
     index = session_index(
         visible_ids,
         session.get("reviewedIds"),
         session.get("currentCardId"),
-        bool(session.get("atEnd")),
+        bool(session.get("atEnd")) and not arrivals,
     )
     frontier = session_frontier(visible_ids, session.get("reviewedIds"))
     grades = grades_for_session(
@@ -343,8 +389,11 @@ async def daily_plan(user: dict = Depends(get_current_user)):
     sizes = plan_sizes(int(prefs.get("dailyTarget") or 30))
     focus = focus_query(focus_skill_tokens(prefs.get("focusModules") or []))
 
+    frozen = await frozen_source_ids(uid)
+    active = active_item_query(frozen)
+
     async def top(col, n):
-        q = {"userId": uid, "hidden": {"$ne": True}, "status": {"$in": ["new", "learning"]}}
+        q = {"userId": uid, "hidden": {"$ne": True}, "status": {"$in": ["new", "learning"]}, **active}
         if focus:
             q.update(focus)
         cur = col.find(q).sort("priorityScore", -1).limit(n)
@@ -353,7 +402,7 @@ async def daily_plan(user: dict = Depends(get_current_user)):
     words = await top(db.vocab(), sizes["words"])
     phrases = await top(db.phrases(), sizes["phrases"])
     patterns = await top(db.patterns(), sizes["patterns"])
-    due = await db.cards().count_documents({"userId": uid, "nextReviewAt": {"$lte": now()}})
+    due = (await studyable_card_stats(uid))["due"]
     est_minutes = round(len(words) * 0.5 + len(phrases) * 0.6 + len(patterns) * 0.8 + due * 0.4)
     return {
         "date": now().date().isoformat(),
@@ -376,9 +425,14 @@ async def quiz(
     mode: str = "meaning",
     count: int = Query(10, ge=1, le=20),
 ):
-    """Generate quiz questions from enriched vocabulary/phrases."""
+    """Generate quiz questions from enriched vocabulary that is not frozen."""
     pool = [d async for d in db.vocab().find(
-        {"userId": uid, "hidden": {"$ne": True}, "simpleEnglishMeaning": {"$ne": ""}}
+        {
+            "userId": uid,
+            "hidden": {"$ne": True},
+            "simpleEnglishMeaning": {"$ne": ""},
+            **active_item_query(await frozen_source_ids(uid)),
+        }
     ).sort("priorityScore", -1).limit(120)]
     if len(pool) < 4:
         return {"questions": [], "message": "Not enough enriched vocabulary to build a quiz yet."}
@@ -440,10 +494,42 @@ def _quiz_view(doc: dict | None) -> dict:
     return saved
 
 
+async def _frozen_question_ids(uid: str, questions: list[dict]) -> set[str]:
+    frozen = await frozen_source_ids(uid)
+    if not frozen:
+        return set()
+    ids = [oid(str(question.get("id"))) for question in questions if is_oid(str(question.get("id") or ""))]
+    blocked: set[str] = set()
+    if not ids:
+        return blocked
+    async for doc in db.vocab().find({"_id": {"$in": ids}, "userId": uid}, {"sourceIds": 1}):
+        if item_is_frozen(doc.get("sourceIds"), frozen):
+            blocked.add(str(doc["_id"]))
+    return blocked
+
+
+async def _quiz_for_user(uid: str, doc: dict | None) -> dict:
+    """Saved quiz with questions from frozen sources left out of this response.
+
+    The stored list stays intact, so unfreezing brings those questions back.
+    """
+    saved = _quiz_view(doc)
+    if not saved["questions"]:
+        return saved
+    blocked = await _frozen_question_ids(uid, saved["questions"])
+    if not blocked:
+        return saved
+    kept, index = without_frozen_questions(saved["questions"], saved["index"], blocked)
+    progress = quiz_progress(kept, index, saved.get("answers"))
+    if not kept or progress["index"] >= len(kept):
+        return {"mode": None, "questions": [], "index": 0, "answers": [], "score": progress["score"]}
+    return {"mode": saved["mode"], "questions": kept, **progress}
+
+
 @router.get("/quiz/session")
 async def read_quiz_session(uid: str = Depends(current_user_id)):
     doc = await db.quiz_progress().find_one({"_id": uid})
-    return _quiz_view(doc)
+    return await _quiz_for_user(uid, doc)
 
 
 @router.post("/quiz/session")
@@ -475,9 +561,14 @@ async def save_quiz_session(body: QuizProgressIn, uid: str = Depends(current_use
     if not doc:
         raise HTTPException(404, "No quiz in progress")
     questions = clean_questions(doc.get("questions"))
+    blocked = await _frozen_question_ids(uid, questions)
+    kept, _ = without_frozen_questions(questions, 0, blocked)
+    if not kept:
+        return {"mode": None, "questions": [], "index": 0, "answers": [], "score": 0}
+    stored_index = index_in_full(questions, kept, body.index)
     progress = quiz_progress(
         questions,
-        body.index,
+        stored_index,
         [answer.model_dump() for answer in body.answers],
     )
     if progress["index"] >= len(questions):
@@ -492,7 +583,7 @@ async def save_quiz_session(body: QuizProgressIn, uid: str = Depends(current_use
         }},
     )
     doc.update(progress)
-    return _quiz_view(doc)
+    return await _quiz_for_user(uid, doc)
 
 
 @router.delete("/quiz/session")

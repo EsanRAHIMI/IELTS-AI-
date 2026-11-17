@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
-import { UploadCloud, Link2, FileText, RefreshCw, Trash2, CheckCircle2, AlertCircle, AlertTriangle, ScanLine, Layers, Download, Eye, Square } from "lucide-react";
+import { UploadCloud, Link2, FileText, RefreshCw, Trash2, CheckCircle2, AlertCircle, AlertTriangle, ScanLine, Layers, Download, Eye, Square, Snowflake } from "lucide-react";
 import { api, BASE_URL, getToken, uploadWithProgress } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import type { Source, Job, SourceDeleteImpact } from "@/types";
@@ -48,6 +48,7 @@ export default function ImportPage() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [reprocessId, setReprocessId] = useState<string | null>(null);
+  const [freezingId, setFreezingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<WorkNotice & { sourceId?: string } | null>(null);
   const [uploadName, setUploadName] = useState<string | null>(null);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
@@ -183,6 +184,18 @@ export default function ImportPage() {
     }
   }
 
+  async function toggleFreeze(source: Source) {
+    setFreezingId(source.id);
+    try {
+      await api(`/sources/${source.id}/freeze`, { method: "PATCH", body: { frozen: !source.frozen } });
+      reload();
+    } catch (e: unknown) {
+      setNotice({ phase: "error", title: "Could not update this source", detail: workError(e) });
+    } finally {
+      setFreezingId(null);
+    }
+  }
+
   async function cancelProcessing(id: string) {
     setNotice({ phase: "progress", title: "Stopping processing" });
     try {
@@ -196,7 +209,7 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="page-stack lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
+    <div className="page-stack pb-8 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
       <Card>
         <CardHeader><CardTitle>Add a source</CardTitle></CardHeader>
         <CardContent>
@@ -305,6 +318,7 @@ export default function ImportPage() {
                   <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                     {(s.originalFileName || s.type).toString()} · {s.type.toUpperCase()} ·{" "}
                     {s.stats?.wordsExtracted ?? 0} words · {s.stats?.phrasesExtracted ?? 0} phrases
+                    {s.frozen ? " · Frozen" : ""}
                   </p>
                 </div>
               </div>
@@ -316,6 +330,16 @@ export default function ImportPage() {
               <div className="mt-3 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
                 <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setPreviewId(s.id)}>
                   <Eye className="h-3.5 w-3.5" /> Review
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 w-full gap-1 sm:h-8 sm:w-auto"
+                  aria-pressed={!!s.frozen}
+                  disabled={freezingId === s.id}
+                  onClick={() => toggleFreeze(s)}
+                >
+                  <Snowflake className="h-3.5 w-3.5" /> {s.frozen ? "Unfreeze" : "Freeze"}
                 </Button>
                 {s.hasFile && (
                   <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => download(s.id)}>

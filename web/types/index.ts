@@ -89,6 +89,7 @@ export interface Source {
   stats?: SourceStats;
   processedAt?: string;
   createdAt: string;
+  frozen?: boolean;
 }
 
 export interface SourceStats {
