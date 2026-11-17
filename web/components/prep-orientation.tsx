@@ -81,6 +81,7 @@ export function PrepOrientation() {
   const action = step?.action ?? (failed ? "Open home" : "");
   const href = step?.href ?? "/dashboard";
   const hidden = useOrientationHidden();
+  const showAction = Boolean(action) && pathname !== "/dashboard";
 
   if (hidden) return null;
 
@@ -95,11 +96,12 @@ export function PrepOrientation() {
         {clock.zone ? <span className="ml-1 hidden font-medium text-muted-foreground sm:inline"> {clock.zone}</span> : null}
       </time>
       <span className="min-w-0 truncate text-xs font-semibold sm:text-sm">{label}</span>
-      {action ? (
+      {showAction ? (
         <Link
           href={href}
           title={detail}
           aria-label={`${action}. ${detail}`}
+          data-orientation-action=""
           className="ml-auto inline-flex h-8 min-w-0 max-w-[46%] items-center truncate rounded-full bg-primary px-2.5 text-[11px] font-medium text-primary-foreground sm:max-w-[14rem] sm:px-3 sm:text-xs"
         >
           {action}

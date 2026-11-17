@@ -152,6 +152,11 @@ export interface Dashboard {
   dueToday: number;
   mastered: number;
   learning: number;
+  cardsNew?: number;
+  studied?: number;
+  library?: number;
+  sourceNames?: string[];
+  moreSources?: number;
   streak: number;
   focus: string[];
   targetBand: number | null;
