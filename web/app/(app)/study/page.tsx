@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { workError } from "@/components/ui/work-status";
+import { usePwaInstallContext } from "@/components/pwa-install-provider";
 
 const RTL = new Set(["fa", "ar", "ur"]);
 
@@ -55,8 +56,12 @@ function gradeFromEvent(e: KeyboardEvent): string | null {
   return GRADE_BY_CODE[e.code] || GRADE_BY_KEY[e.key] || null;
 }
 
+const TAB_CLEARANCE = "calc(4.75rem + max(1rem, var(--safe-bottom)))";
+const GRADE_CLEARANCE = "calc(8rem + max(1rem, var(--safe-bottom)))";
+
 export default function StudyPage() {
   const { user } = useAuth();
+  const { canShow: showPwaBanner } = usePwaInstallContext();
   const language = user?.settings.translationLanguage || "fa";
   const [queue, setQueue] = useState<CardType[]>([]);
   const [idx, setIdx] = useState(0);
@@ -363,20 +368,28 @@ export default function StudyPage() {
     );
   }
 
+  const showGrades = Boolean(revealed || chosenGrade);
+  const belowTabs = showPwaBanner ? "calc(12.25rem + max(1rem, var(--safe-bottom)))" : TAB_CLEARANCE;
+  const belowGrades = showPwaBanner ? "calc(15.5rem + max(1rem, var(--safe-bottom)))" : GRADE_CLEARANCE;
+
   return (
+    <>
     <div
-      className="mx-auto max-w-2xl space-y-6"
+      data-study-card
+      className="fixed inset-x-0 top-[var(--app-topbar-height)] z-20 flex flex-col bg-background lg:left-64"
+      style={{ bottom: showGrades ? belowGrades : belowTabs }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={() => { swipe.current = null; }}
     >
       {cornerToast}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-page py-3">
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {backButton}
           <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <span>Card {idx + 1} of {queue.length}</span>
-            <span className="hidden items-center gap-1 sm:flex"><Keyboard className="h-4 w-4" /> Space reveal · 1–4 grade · ← back</span>
+            <span className="hidden items-center gap-1 lg:flex"><Keyboard className="h-4 w-4" /> Space reveal · 1–4 grade · ← back</span>
           </div>
           {forwardButton}
         </div>
@@ -461,8 +474,15 @@ export default function StudyPage() {
         </motion.div>
       </AnimatePresence>
 
-      {(revealed || chosenGrade) && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      </div>
+    </div>
+    {showGrades && (
+      <div
+        data-study-grades
+        className="fixed inset-x-0 z-30 border-t bg-background/95 px-3 py-1.5 backdrop-blur lg:left-64"
+        style={{ bottom: belowTabs }}
+      >
+        <div className="mx-auto grid max-w-2xl grid-cols-4 gap-1.5">
           {GRADES.map((g) => {
             const selected = chosenGrade === g.key;
             const dimmed = !!chosenGrade && !selected;
@@ -473,18 +493,20 @@ export default function StudyPage() {
                 aria-pressed={selected}
                 onClick={() => grade(g.key)}
                 className={cn(
-                  "flex min-h-[3.25rem] flex-col items-center justify-center rounded-xl px-2 py-3 text-sm font-medium transition-colors",
+                  "flex h-9 min-w-0 items-center justify-center gap-1 rounded-lg px-1 text-sm font-medium transition-colors",
                   g.cls,
-                  selected && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
+                  selected && "ring-2 ring-foreground ring-offset-1 ring-offset-background",
                   dimmed && "opacity-40 saturate-50",
                 )}
               >
-                {g.label}<span className="text-xs opacity-70">{g.hint}</span>
+                <span className="truncate">{g.label}</span>
+                <span className="hidden text-xs opacity-70 lg:inline">{g.hint}</span>
               </button>
             );
           })}
         </div>
-      )}
-    </div>
+      </div>
+    )}
+    </>
   );
 }

@@ -10,7 +10,6 @@ import { Sheet } from "@/components/ui/sheet";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { PwaInstallProvider, usePwaInstallContext } from "@/components/pwa-install-provider";
 import { MobileTabBar } from "@/components/mobile-tab-bar";
-import { PrepOrientation } from "@/components/prep-orientation";
 import { OrientationVisibility } from "@/components/orientation-visibility";
 
 const TITLES: Record<string, string> = {
@@ -79,7 +78,6 @@ function AppShell({
       <div className="flex min-h-app min-w-0 flex-1 flex-col overflow-hidden">
         <OrientationVisibility>
           <Topbar onMenu={() => setMobileOpen(true)} title={title} />
-          <PrepOrientation />
           <main
             className={cn(
               "flex-1 overflow-y-auto overflow-x-clip py-4 px-page md:p-6 lg:p-8",
