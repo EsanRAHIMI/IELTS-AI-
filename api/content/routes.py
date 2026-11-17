@@ -17,7 +17,7 @@ from http_util import clamp_page, search_regex
 from quotas import consume_ai_call
 from utils.serialization import now, oid, is_oid, serialize
 from ai import service as ai
-from sources.freeze import active_item_query, frozen_source_ids, item_is_frozen
+from sources.freeze import active_item_query, item_is_frozen, unfrozen_source_ids
 
 router = APIRouter(tags=["content"])
 
@@ -38,7 +38,10 @@ async def list_vocab(
     includeHidden: bool = False,
     sort: str = "priority",
 ):
-    q: dict = {"userId": uid, **active_item_query(await frozen_source_ids(uid))}
+    open_ids = await unfrozen_source_ids(uid)
+    if source:
+        open_ids = {source} & open_ids
+    q: dict = {"userId": uid, **active_item_query(open_ids)}
     if not includeHidden:
         q["hidden"] = {"$ne": True}
     word_search = search_regex(search)
@@ -53,8 +56,6 @@ async def list_vocab(
         q["status"] = status
     if pos:
         q["partOfSpeech"] = pos
-    if source:
-        q["sourceIds"] = source
     if minPriority:
         q["priorityScore"] = {"$gte": minPriority}
 
@@ -71,7 +72,7 @@ async def list_vocab(
 @router.get("/vocabulary/{item_id}")
 async def vocab_detail(item_id: str, uid: str = Depends(current_user_id)):
     doc = await _get(db.vocab(), item_id, uid)
-    if item_is_frozen(doc.get("sourceIds"), await frozen_source_ids(uid)):
+    if item_is_frozen(doc.get("sourceIds"), await unfrozen_source_ids(uid)):
         raise HTTPException(404, "Not found")
     # attach source snippets
     snippets = []
@@ -113,7 +114,7 @@ async def list_phrases(
     status: str | None = None,
     includeHidden: bool = False,
 ):
-    q: dict = {"userId": uid, **active_item_query(await frozen_source_ids(uid))}
+    q: dict = {"userId": uid, **active_item_query(await unfrozen_source_ids(uid))}
     if not includeHidden:
         q["hidden"] = {"$ne": True}
     phrase_search = search_regex(search)
@@ -154,7 +155,7 @@ async def list_patterns(
     category: str | None = None,
     includeHidden: bool = False,
 ):
-    q: dict = {"userId": uid, **active_item_query(await frozen_source_ids(uid))}
+    q: dict = {"userId": uid, **active_item_query(await unfrozen_source_ids(uid))}
     if not includeHidden:
         q["hidden"] = {"$ne": True}
     sentence_search = search_regex(search)

@@ -32,10 +32,10 @@ from study.plan import focus_query, focus_skill_tokens, plan_sizes
 from study.translate import LANGUAGES, card_source_text, normalize_language, normalize_translation, stored_translation
 from sources.freeze import (
     active_item_query,
-    frozen_ref_pairs,
-    frozen_source_ids,
+    studyable_ref_pairs,
     index_in_full,
     item_is_frozen,
+    unfrozen_source_ids,
     studyable_card_stats,
     without_frozen_questions,
 )
@@ -95,7 +95,7 @@ async def add_card(body: AddCard, uid: str = Depends(current_user_id)):
         raise HTTPException(400, "Invalid refId")
     col = _TYPE_COL[body.type]()
     item = await col.find_one({"_id": oid(body.refId), "userId": uid})
-    if not item or item.get("hidden") or item_is_frozen(item.get("sourceIds"), await frozen_source_ids(uid)):
+    if not item or item.get("hidden") or item_is_frozen(item.get("sourceIds"), await unfrozen_source_ids(uid)):
         raise HTTPException(404, "Item not found")
     existing = await db.cards().find_one({"userId": uid, "type": body.type, "refId": body.refId})
     if existing:
@@ -115,12 +115,12 @@ async def list_cards(
     q: dict = {"userId": uid}
     if status:
         q["status"] = status
-    blocked = await frozen_ref_pairs(uid)
+    allowed = await studyable_ref_pairs(uid)
     cap = clamp_limit(limit, default=100, maximum=100)
     cur = db.cards().find(q).sort("nextReviewAt", 1)
     items = []
     async for doc in cur:
-        if (doc.get("type"), str(doc.get("refId") or "")) in blocked:
+        if (doc.get("type"), str(doc.get("refId") or "")) not in allowed:
             continue
         items.append(serialize(doc))
         if len(items) >= cap:
@@ -146,12 +146,12 @@ async def _hidden_refs(uid: str, cards: list[dict]) -> set[tuple[str, str]]:
 
 
 async def _due_card_ids(uid: str, limit: int) -> list[str]:
-    blocked = await frozen_ref_pairs(uid)
+    allowed = await studyable_ref_pairs(uid)
     q = {"userId": uid, "nextReviewAt": {"$lte": now()}}
     cur = db.cards().find(q, {"_id": 1, "type": 1, "refId": 1}).sort([("status", 1), ("nextReviewAt", 1)])
     ids: list[str] = []
     async for doc in cur:
-        if (doc.get("type"), str(doc.get("refId") or "")) in blocked:
+        if (doc.get("type"), str(doc.get("refId") or "")) not in allowed:
             continue
         ids.append(str(doc["_id"]))
         if len(ids) >= limit:
@@ -206,8 +206,12 @@ async def review_queue(
             found[str(doc["_id"])] = doc
     loaded = [found[card_id] for card_id in order if card_id in found]
     hidden = await _hidden_refs(uid, loaded)
-    hidden |= await frozen_ref_pairs(uid)
-    visible = [card for card in loaded if not hidden_source(card, hidden)]
+    allowed = await studyable_ref_pairs(uid)
+    visible = [
+        card for card in loaded
+        if not hidden_source(card, hidden)
+        and (card.get("type"), str(card.get("refId") or "")) in allowed
+    ]
     arrivals: list[str] = []
     if len(visible) < capped:
         present = {str(card["_id"]) for card in visible}
@@ -389,8 +393,7 @@ async def daily_plan(user: dict = Depends(get_current_user)):
     sizes = plan_sizes(int(prefs.get("dailyTarget") or 30))
     focus = focus_query(focus_skill_tokens(prefs.get("focusModules") or []))
 
-    frozen = await frozen_source_ids(uid)
-    active = active_item_query(frozen)
+    active = active_item_query(await unfrozen_source_ids(uid))
 
     async def top(col, n):
         q = {"userId": uid, "hidden": {"$ne": True}, "status": {"$in": ["new", "learning"]}, **active}
@@ -431,7 +434,7 @@ async def quiz(
             "userId": uid,
             "hidden": {"$ne": True},
             "simpleEnglishMeaning": {"$ne": ""},
-            **active_item_query(await frozen_source_ids(uid)),
+            **active_item_query(await unfrozen_source_ids(uid)),
         }
     ).sort("priorityScore", -1).limit(120)]
     if len(pool) < 4:
@@ -495,16 +498,19 @@ def _quiz_view(doc: dict | None) -> dict:
 
 
 async def _frozen_question_ids(uid: str, questions: list[dict]) -> set[str]:
-    frozen = await frozen_source_ids(uid)
-    if not frozen:
-        return set()
+    open_ids = await unfrozen_source_ids(uid)
     ids = [oid(str(question.get("id"))) for question in questions if is_oid(str(question.get("id") or ""))]
     blocked: set[str] = set()
-    if not ids:
-        return blocked
-    async for doc in db.vocab().find({"_id": {"$in": ids}, "userId": uid}, {"sourceIds": 1}):
-        if item_is_frozen(doc.get("sourceIds"), frozen):
-            blocked.add(str(doc["_id"]))
+    found: set[str] = set()
+    if ids:
+        async for doc in db.vocab().find({"_id": {"$in": ids}, "userId": uid}, {"sourceIds": 1}):
+            found.add(str(doc["_id"]))
+            if item_is_frozen(doc.get("sourceIds"), open_ids):
+                blocked.add(str(doc["_id"]))
+    for question in questions:
+        qid = str(question.get("id") or "")
+        if qid and qid not in found:
+            blocked.add(qid)
     return blocked
 
 
