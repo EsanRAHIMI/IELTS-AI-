@@ -141,26 +141,31 @@ async def review_queue(
 ):
     """Today's remaining cards, in the order the session started.
 
-    ``restart`` is the Reload queue button: the same cards come back from the
-    start. A normal refresh does not pass it, so finished cards stay finished.
+    ``restart`` is the Reload queue button after the session is finished. The
+    same cards come back from the first one, still carrying the grade already
+    chosen, so the learner can step through them again. A normal refresh does
+    not pass it, so a finished session stays on the end screen.
     """
     capped = clamp_limit(limit, default=40, maximum=100)
     session = await db.study_progress().find_one({"_id": f"{uid}:{now().date().isoformat()}"})
     if restart and session and session.get("cardIds"):
-        card_ids, reviewed_ids = session_for_reload(session.get("cardIds"))
+        card_ids, reviewed_ids = session_for_reload(session.get("cardIds"), session.get("reviewedIds"))
+        current_card_id = card_ids[0] if card_ids else None
         await db.study_progress().update_one(
             {"_id": session["_id"]},
             {"$set": {
                 "cardIds": card_ids,
                 "reviewedIds": reviewed_ids,
-                "currentCardId": None,
+                "currentCardId": current_card_id,
                 "atEnd": False,
+                "quickReview": True,
             }},
         )
         session["cardIds"] = card_ids
         session["reviewedIds"] = reviewed_ids
-        session["currentCardId"] = None
+        session["currentCardId"] = current_card_id
         session["atEnd"] = False
+        session["quickReview"] = True
     elif not session or not session.get("cardIds"):
         session = await ensure_session(uid, await _due_card_ids(uid, capped))
     order: list[str] = []
@@ -196,6 +201,7 @@ async def review_queue(
         "index": index,
         "reached": max(index, frontier),
         "grades": grades,
+        "quickReview": bool(session.get("quickReview")),
     }
 
 
