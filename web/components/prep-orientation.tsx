@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { useOrientationHidden } from "@/components/orientation-visibility";
 
 type PrepStep = {
@@ -89,30 +88,23 @@ export function PrepOrientation() {
     <section
       aria-label="Where you are"
       data-prep-stage={step?.stage ?? (failed ? "error" : "loading")}
-      className="shrink-0 border-b bg-card px-page py-2.5 md:px-6 lg:px-8"
+      className="flex min-w-0 flex-1 items-center gap-1.5"
     >
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="shrink-0">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Local time</p>
-            <time dateTime={clock.iso || undefined} data-local-time className="text-sm font-semibold tabular-nums">
-              {clock.time || "—"}
-              {clock.zone ? <span className="ml-1.5 text-xs font-medium text-muted-foreground"> {clock.zone}</span> : null}
-            </time>
-          </div>
-          <span className="h-8 w-px shrink-0 bg-border" aria-hidden />
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Stage</p>
-            <p className="truncate text-sm font-semibold">{label}</p>
-          </div>
-        </div>
-        <p className="min-w-0 flex-1 text-xs leading-5 text-muted-foreground sm:text-right">{detail}</p>
-        {action ? (
-          <Link href={href} className="shrink-0">
-            <Button size="sm" className="w-full sm:w-auto">{action}</Button>
-          </Link>
-        ) : null}
-      </div>
+      <time dateTime={clock.iso || undefined} data-local-time className="shrink-0 text-xs font-semibold tabular-nums sm:text-sm">
+        {clock.time || "—"}
+        {clock.zone ? <span className="ml-1 hidden font-medium text-muted-foreground sm:inline"> {clock.zone}</span> : null}
+      </time>
+      <span className="min-w-0 truncate text-xs font-semibold sm:text-sm">{label}</span>
+      {action ? (
+        <Link
+          href={href}
+          title={detail}
+          aria-label={`${action}. ${detail}`}
+          className="ml-auto inline-flex h-8 min-w-0 max-w-[46%] items-center truncate rounded-full bg-primary px-2.5 text-[11px] font-medium text-primary-foreground sm:max-w-[14rem] sm:px-3 sm:text-xs"
+        >
+          {action}
+        </Link>
+      ) : null}
     </section>
   );
 }
