@@ -1,21 +1,21 @@
-"""Freezing a source hides only the content that has nowhere else to live."""
+"""An item stays visible only while one of its sources is still open."""
 from sources.freeze import active_item_query, index_in_full, item_is_frozen, without_frozen_questions
 
 
-def test_shared_item_stays_when_one_source_is_frozen():
-    frozen = {"source-b"}
-    assert item_is_frozen(["source-a", "source-b"], frozen) is False
-    assert item_is_frozen(["source-b"], frozen) is True
-    assert item_is_frozen([], frozen) is False
-    assert item_is_frozen(None, frozen) is False
-    assert item_is_frozen(["source-b"], set()) is False
+def test_an_item_needs_one_open_source():
+    open_ids = {"source-a"}
+    assert item_is_frozen(["source-a", "source-b"], open_ids) is False
+    assert item_is_frozen(["source-b"], open_ids) is True
+    assert item_is_frozen([], open_ids) is True
+    assert item_is_frozen(None, open_ids) is True
+    assert item_is_frozen("source-a", open_ids) is False
+    assert item_is_frozen(["source-a"], set()) is True
 
 
-def test_active_query_is_empty_until_something_is_frozen():
-    assert active_item_query(set()) == {}
-    query = active_item_query({"source-b"})
-    assert "$nor" in query
-    assert "source-b" in query["$nor"][0]["sourceIds"]["$not"]["$elemMatch"]["$nin"]
+def test_active_query_matches_only_open_sources():
+    assert active_item_query(set()) == {"sourceIds": {"$in": []}}
+    query = active_item_query({"source-a"})
+    assert set(query["sourceIds"]["$in"]) == {"source-a"}
 
 
 def test_a_filtered_quiz_place_maps_back_onto_the_stored_list():

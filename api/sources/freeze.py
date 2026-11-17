@@ -1,7 +1,8 @@
-"""A frozen source stays stored, but its exclusive content is set aside.
+"""A frozen source stays stored, but its content is set aside.
 
-An item linked to at least one unfrozen source stays available. An item with
-no source stays available. An item whose every source is frozen does not.
+An item is visible only when at least one of its sources is still open.
+A missing or empty source list is not an open source, so those items stay
+hidden too. Nothing is deleted.
 """
 from __future__ import annotations
 
@@ -9,28 +10,24 @@ import database as db
 from utils.serialization import now
 
 
-def item_is_frozen(source_ids, frozen_ids: set[str]) -> bool:
-    if not frozen_ids or not isinstance(source_ids, list):
-        return False
-    ids = [str(source_id) for source_id in source_ids if source_id]
-    if not ids:
-        return False
-    return all(source_id in frozen_ids for source_id in ids)
+def _source_ids(source_ids) -> list[str]:
+    if isinstance(source_ids, str):
+        return [source_ids] if source_ids else []
+    if not isinstance(source_ids, list):
+        return []
+    return [str(source_id) for source_id in source_ids if source_id]
 
 
-def active_item_query(frozen_ids: set[str]) -> dict:
-    """Mongo clause for items the learner can still study."""
-    if not frozen_ids:
-        return {}
-    ids = list(frozen_ids)
-    return {
-        "$nor": [
-            {
-                "sourceIds.0": {"$exists": True},
-                "sourceIds": {"$not": {"$elemMatch": {"$nin": ids}}},
-            }
-        ]
-    }
+def item_is_frozen(source_ids, unfrozen_ids: set[str]) -> bool:
+    """True when the item does not belong to any unfrozen source."""
+    if not unfrozen_ids:
+        return True
+    return not any(source_id in unfrozen_ids for source_id in _source_ids(source_ids))
+
+
+def active_item_query(unfrozen_ids: set[str]) -> dict:
+    """Mongo clause for items that belong to at least one open source."""
+    return {"sourceIds": {"$in": list(unfrozen_ids)}}
 
 
 def index_in_full(full: list, kept: list, filtered_index) -> int:
@@ -69,18 +66,18 @@ def without_frozen_questions(questions: list, index, blocked_ids: set[str]) -> t
     return kept, max(0, cursor - removed_before)
 
 
-async def frozen_source_ids(uid: str) -> set[str]:
+async def unfrozen_source_ids(uid: str) -> set[str]:
     found: set[str] = set()
-    cursor = db.sources().find({"userId": uid, "frozen": True}, {"_id": 1})
+    cursor = db.sources().find({"userId": uid, "frozen": {"$ne": True}}, {"_id": 1})
     async for doc in cursor:
         found.add(str(doc["_id"]))
     return found
 
 
-async def frozen_ref_pairs(uid: str) -> set[tuple[str, str]]:
-    """Cards to hide: ``(card type, item id)`` for items only on frozen sources."""
-    frozen = await frozen_source_ids(uid)
-    if not frozen:
+async def studyable_ref_pairs(uid: str) -> set[tuple[str, str]]:
+    """Cards the learner can open: ``(card type, item id)`` on an open source."""
+    open_ids = await unfrozen_source_ids(uid)
+    if not open_ids:
         return set()
     pairs: set[tuple[str, str]] = set()
     collections = (
@@ -89,19 +86,21 @@ async def frozen_ref_pairs(uid: str) -> set[tuple[str, str]]:
         ("sentence_pattern", db.patterns()),
     )
     for card_type, col in collections:
-        cursor = col.find({"userId": uid, "sourceIds.0": {"$exists": True}}, {"sourceIds": 1})
+        cursor = col.find(
+            {"userId": uid, "sourceIds": {"$in": list(open_ids)}},
+            {"_id": 1},
+        )
         async for doc in cursor:
-            if item_is_frozen(doc.get("sourceIds"), frozen):
-                pairs.add((card_type, str(doc["_id"])))
+            pairs.add((card_type, str(doc["_id"])))
     return pairs
 
 
 async def studyable_card_stats(uid: str) -> dict:
     """Status and due counts for cards the learner can still open."""
-    blocked = await frozen_ref_pairs(uid)
+    allowed = await studyable_ref_pairs(uid)
     counts = {"new": 0, "learning": 0, "review": 0, "mastered": 0, "due": 0, "due_study": 0, "due_review": 0}
     async for card in db.cards().find({"userId": uid}, {"status": 1, "type": 1, "refId": 1}):
-        if (card.get("type"), str(card.get("refId") or "")) in blocked:
+        if (card.get("type"), str(card.get("refId") or "")) not in allowed:
             continue
         status = str(card.get("status") or "new")
         if status in ("new", "learning", "review", "mastered"):
@@ -111,7 +110,7 @@ async def studyable_card_stats(uid: str) -> dict:
         {"userId": uid, "nextReviewAt": {"$lte": moment}},
         {"status": 1, "type": 1, "refId": 1},
     ):
-        if (card.get("type"), str(card.get("refId") or "")) in blocked:
+        if (card.get("type"), str(card.get("refId") or "")) not in allowed:
             continue
         counts["due"] += 1
         status = str(card.get("status") or "new")

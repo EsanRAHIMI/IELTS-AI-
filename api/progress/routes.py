@@ -8,7 +8,7 @@ import database as db
 from auth.dependencies import current_user_id, get_current_user
 from progress.home import library_progress, listed_sources
 from progress.orientation import prep_orientation
-from sources.freeze import active_item_query, frozen_source_ids, studyable_card_stats
+from sources.freeze import active_item_query, studyable_card_stats, unfrozen_source_ids
 from utils.serialization import now
 
 QUIZ_READY_COUNT = 4
@@ -38,8 +38,8 @@ async def _streak(uid: str) -> int:
 @router.get("/dashboard")
 async def dashboard(user: dict = Depends(get_current_user)):
     uid = user["id"]
-    frozen = await frozen_source_ids(uid)
-    base = {"userId": uid, "hidden": {"$ne": True}, **active_item_query(frozen)}
+    open_ids = await unfrozen_source_ids(uid)
+    base = {"userId": uid, "hidden": {"$ne": True}, **active_item_query(open_ids)}
     total_sources = await db.sources().count_documents({"userId": uid, "frozen": {"$ne": True}})
     total_words = await db.vocab().count_documents(base)
     total_phrases = await db.phrases().count_documents(base)
@@ -124,8 +124,8 @@ async def progress(uid: str = Depends(current_user_id), days: int = Query(30, ge
 @router.get("/orientation")
 async def orientation(uid: str = Depends(current_user_id)):
     """Current prep stage and the one next step, from stored counts."""
-    frozen = await frozen_source_ids(uid)
-    visible = {"userId": uid, "hidden": {"$ne": True}, **active_item_query(frozen)}
+    open_ids = await unfrozen_source_ids(uid)
+    visible = {"userId": uid, "hidden": {"$ne": True}, **active_item_query(open_ids)}
     sources = await db.sources().count_documents({"userId": uid, "frozen": {"$ne": True}})
     words = await db.vocab().count_documents(visible)
     phrases = await db.phrases().count_documents(visible)
