@@ -70,6 +70,7 @@ export default function StudyPage() {
   const [reviewed, setReviewed] = useState(0);
   const [reached, setReached] = useState(0);
   const [grades, setGrades] = useState<Record<string, string>>({});
+  const [quickReview, setQuickReview] = useState(false);
   const { enabled: speakOn, ready: speakReady, speak, stop } = useSpeech();
   const [toast, setToast] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const [reporting, setReporting] = useState(false);
@@ -89,6 +90,7 @@ export default function StudyPage() {
         index?: number;
         reached?: number;
         grades?: Record<string, string>;
+        quickReview?: boolean;
       }>("/study/queue", {
         query: { limit: 40, restart: restart ? 1 : undefined },
       });
@@ -98,6 +100,7 @@ export default function StudyPage() {
       setIdx(index);
       setReached(frontier);
       setGrades(res.grades || {});
+      setQuickReview(Boolean(res.quickReview));
       setRevealed(false);
       setReviewed(res.reviewedToday || 0);
       acceptPlace.current = true;
@@ -205,7 +208,8 @@ export default function StudyPage() {
       }
       setGrades((prev) => ({ ...prev, [current.id]: g }));
       flash("Answer saved", "success");
-      if (prior) {
+      if (prior || quickReview) {
+        if (!prior) setReviewed((count) => count + 1);
         grading.current = false;
         return;
       }
@@ -214,7 +218,7 @@ export default function StudyPage() {
       setIdx((i) => i + 1);
       setReached((r) => Math.max(r, idx + 1));
     },
-    [current, flash, grades, idx],
+    [current, flash, grades, idx, quickReview],
   );
 
   const goBack = useCallback(() => {
@@ -236,12 +240,12 @@ export default function StudyPage() {
   }, [idx]);
 
   const keys = useRef({
-    loading, done, revealed, graded: !!chosenGrade, canGoBack, canGoForward,
+    loading, done, revealed, graded: !!chosenGrade, quickReview, canGoBack, canGoForward,
     reveal: () => setRevealed(true),
     grade, goBack, goForward,
   });
   keys.current = {
-    loading, done, revealed, graded: !!chosenGrade, canGoBack, canGoForward,
+    loading, done, revealed, graded: !!chosenGrade, quickReview, canGoBack, canGoForward,
     reveal: () => setRevealed(true), grade, goBack, goForward,
   };
 
@@ -269,7 +273,7 @@ export default function StudyPage() {
         if (!state.revealed) state.reveal();
         return;
       }
-      if ((!state.revealed && !state.graded) || e.repeat) return;
+      if ((!state.revealed && !state.graded && !state.quickReview) || e.repeat) return;
       const choice = gradeFromEvent(e);
       if (!choice) return;
       e.preventDefault();
@@ -368,7 +372,8 @@ export default function StudyPage() {
     );
   }
 
-  const showGrades = Boolean(revealed || chosenGrade);
+  const showGrades = Boolean(revealed || chosenGrade || quickReview);
+  const glassyGrades = quickReview && !revealed;
   const belowTabs = showPwaBanner ? "calc(12.25rem + max(1rem, var(--safe-bottom)))" : TAB_CLEARANCE;
   const belowGrades = showPwaBanner ? "calc(15.5rem + max(1rem, var(--safe-bottom)))" : GRADE_CLEARANCE;
 
@@ -479,7 +484,11 @@ export default function StudyPage() {
     {showGrades && (
       <div
         data-study-grades
-        className="fixed inset-x-0 z-30 border-t bg-background/95 px-3 py-1.5 backdrop-blur lg:left-64"
+        data-grade-style={glassyGrades ? "glass" : "solid"}
+        className={cn(
+          "fixed inset-x-0 z-30 border-t px-3 py-1.5 lg:left-64",
+          glassyGrades ? "border-transparent bg-transparent" : "border-border bg-background/95 backdrop-blur",
+        )}
         style={{ bottom: belowTabs }}
       >
         <div className="mx-auto grid max-w-2xl grid-cols-4 gap-1.5">
@@ -490,13 +499,17 @@ export default function StudyPage() {
               <button
                 key={g.key}
                 type="button"
+                data-grade={g.key}
                 aria-pressed={selected}
                 onClick={() => grade(g.key)}
                 className={cn(
                   "flex h-9 min-w-0 items-center justify-center gap-1 rounded-lg px-1 text-sm font-medium transition-colors",
-                  g.cls,
-                  selected && "ring-2 ring-foreground ring-offset-1 ring-offset-background",
-                  dimmed && "opacity-40 saturate-50",
+                  glassyGrades
+                    ? "border border-foreground/20 bg-foreground/10 text-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.35)] backdrop-blur-md dark:border-white/30 dark:bg-white/10"
+                    : g.cls,
+                  glassyGrades && selected && "border-foreground/55 bg-foreground/20 ring-2 ring-foreground/60 dark:border-white/70 dark:bg-white/25 dark:ring-white/80",
+                  !glassyGrades && selected && "ring-2 ring-foreground ring-offset-1 ring-offset-background",
+                  dimmed && (glassyGrades ? "opacity-40" : "opacity-40 saturate-50"),
                 )}
               >
                 <span className="truncate">{g.label}</span>

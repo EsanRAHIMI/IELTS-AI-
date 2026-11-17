@@ -39,14 +39,13 @@ def hidden_source(card: dict, hidden_refs: set[tuple[str, str]]) -> bool:
     return (card.get("type"), str(card.get("refId") or "")) in hidden_refs
 
 
-def session_for_reload(card_ids: list | None) -> tuple[list[str], list[str]]:
-    """Bring a finished queue back. Reported cards are already gone from the list."""
-    kept: list[str] = []
-    for item in card_ids or []:
-        sid = str(item)
-        if sid and sid not in kept:
-            kept.append(sid)
-    return kept, []
+def session_for_reload(card_ids: list | None, reviewed_ids: list | None = None) -> tuple[list[str], list[str]]:
+    """Bring a finished queue back from the first card, keeping every earlier grade.
+
+    Reported cards stay in ``reviewed_ids`` even after they leave the list, so a
+    reload cannot bring them back.
+    """
+    return _dedupe(card_ids), _dedupe(reviewed_ids)
 
 
 def _dedupe(card_ids: list | None) -> list[str]:

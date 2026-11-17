@@ -33,12 +33,23 @@ def test_hidden_source_is_not_shown_again():
     assert hidden_source({"type": "phrase", "refId": "word-1"}, hidden) is False
 
 
-def test_reload_after_finishing_returns_the_same_cards():
+def test_reload_after_finishing_keeps_the_cards_and_their_grades():
     finished = remaining_ids(["a", "b", "c"], ["a", "b", "c"])
     assert finished == []
-    cards, reviewed = session_for_reload(["a", "b", "a", "c"])
+    cards, reviewed = session_for_reload(["a", "b", "a", "c"], ["b", "a", "c", "removed"])
     assert cards == ["a", "b", "c"]
-    assert remaining_ids(cards, reviewed) == ["a", "b", "c"]
+    assert reviewed == ["b", "a", "c", "removed"]
+    assert session_index(cards, reviewed, "a", False) == 0
+    assert session_frontier(cards, reviewed) == 3
+    assert grades_for_session(
+        [
+            {"cardId": "a", "grade": "hard"},
+            {"cardId": "a", "grade": "easy"},
+            {"cardId": "b", "grade": "again"},
+            {"cardId": "removed", "grade": "good"},
+        ],
+        reviewed,
+    ) == {"a": "easy", "b": "again", "removed": "good"}
 
 
 def test_refresh_returns_to_the_card_they_had_open():
