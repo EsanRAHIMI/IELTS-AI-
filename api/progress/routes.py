@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 import database as db
 from auth.dependencies import current_user_id, get_current_user
+from progress.home import library_progress, listed_sources
 from progress.orientation import prep_orientation
 from utils.serialization import now
 
@@ -42,8 +43,17 @@ async def dashboard(user: dict = Depends(get_current_user)):
     total_phrases = await db.phrases().count_documents(base)
     total_patterns = await db.patterns().count_documents(base)
     due_today = await db.cards().count_documents({"userId": uid, "nextReviewAt": {"$lte": now()}})
-    mastered = await db.cards().count_documents({"userId": uid, "status": "mastered"})
-    learning = await db.cards().count_documents({"userId": uid, "status": {"$in": ["learning", "review"]}})
+    status_counts: dict[str, int] = {}
+    async for row in db.cards().aggregate([
+        {"$match": {"userId": uid}},
+        {"$group": {"_id": "$status", "n": {"$sum": 1}}},
+    ]):
+        status_counts[str(row.get("_id") or "new")] = int(row.get("n") or 0)
+    cards = library_progress(status_counts, due_today)
+    titles = []
+    async for source in db.sources().find({"userId": uid}, {"title": 1}).sort("createdAt", -1):
+        titles.append(source.get("title"))
+    shown_sources, more_sources = listed_sources(titles)
     streak = await _streak(uid)
     settings = user.get("settings", {})
     return {
@@ -51,9 +61,14 @@ async def dashboard(user: dict = Depends(get_current_user)):
         "totalWords": total_words,
         "totalPhrases": total_phrases,
         "totalPatterns": total_patterns,
-        "dueToday": due_today,
-        "mastered": mastered,
-        "learning": learning,
+        "dueToday": cards["due"],
+        "mastered": cards["mastered"],
+        "learning": cards["learning"],
+        "cardsNew": cards["new"],
+        "studied": cards["studied"],
+        "library": total_words + total_phrases + total_patterns,
+        "sourceNames": shown_sources,
+        "moreSources": more_sources,
         "streak": streak,
         "focus": settings.get("focusModules", []),
         "targetBand": settings.get("targetBand"),

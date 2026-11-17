@@ -1,123 +1,170 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
-import {
-  BookText,
-  Quote,
-  Layers,
-  FileStack,
-  Flame,
-  Trophy,
-  CalendarClock,
-  Target,
-  ArrowRight,
-} from "lucide-react";
 import { useApiData } from "@/hooks/useApiData";
 import type { Dashboard } from "@/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function DashboardPage() {
-  const { data, loading } = useApiData<Dashboard>("/dashboard");
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-  const stats = [
-    { label: "Sources", value: data?.totalSources, icon: FileStack, href: "/import" },
-    { label: "Words", value: data?.totalWords, icon: BookText, href: "/vocabulary" },
-    { label: "Phrases", value: data?.totalPhrases, icon: Quote, href: "/phrases" },
-    { label: "Patterns", value: data?.totalPatterns, icon: Layers, href: "/patterns" },
-  ];
+const CHOICES = [
+  { href: "/study", label: "Study" },
+  { href: "/daily-plan", label: "Daily plan" },
+  { href: "/quiz", label: "Quiz" },
+];
 
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <Link href={s.href}>
-              <Card className="transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center justify-between p-6">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{s.label}</p>
-                    {loading ? <Skeleton className="mt-2 h-8 w-16" /> : <p className="mt-1 text-3xl font-bold">{s.value ?? 0}</p>}
-                  </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary text-foreground">
-                    <s.icon className="h-6 w-6" />
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          </motion.div>
-        ))}
-      </div>
+type PrepStep = {
+  stage: string;
+  stageLabel: string;
+  action: string;
+  detail: string;
+  href: string;
+};
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Today&apos;s study snapshot</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
-            <MiniStat icon={<CalendarClock className="h-5 w-5" />} label="Cards due today" value={data?.dueToday ?? 0} loading={loading} accent />
-            <MiniStat icon={<Trophy className="h-5 w-5" />} label="Mastered items" value={data?.mastered ?? 0} loading={loading} />
-            <MiniStat icon={<Flame className="h-5 w-5" />} label="Learning streak" value={`${data?.streak ?? 0} d`} loading={loading} />
-          </CardContent>
-          <CardContent className="pt-0">
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <Link href="/study" className="w-full sm:w-auto"><Button className="h-10 w-full gap-2 sm:w-auto">Start studying <ArrowRight className="h-4 w-4" /></Button></Link>
-              <Link href="/daily-plan" className="w-full sm:w-auto"><Button variant="outline" className="h-10 w-full sm:w-auto">View daily plan</Button></Link>
-              <Link href="/quiz" className="w-full sm:w-auto"><Button variant="outline" className="h-10 w-full sm:w-auto">Take a quiz</Button></Link>
-            </div>
-          </CardContent>
-        </Card>
+type ExamFact = { label: string; value: string };
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Target className="h-5 w-5" /> Current focus</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Focus modules</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {(data?.focus || []).length ? (
-                  data!.focus.map((f) => <Badge key={f} variant="secondary">{f}</Badge>)
-                ) : (
-                  <span className="text-sm text-muted-foreground">Set in Settings</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-between border-t pt-3 text-sm">
-              <span className="text-muted-foreground">Target band</span>
-              <span className="font-semibold">{data?.targetBand ?? "—"}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Exam date</span>
-              <span className="font-semibold">{data?.examDate || "Not set"}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {!loading && data && data.totalWords === 0 && (
-        <Card className="border-accent/40 bg-accent/5">
-          <CardContent className="flex flex-col items-start gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold">Your corpus is empty.</p>
-              <p className="text-sm text-muted-foreground">Import a source or seed the starter IELTS dataset to begin.</p>
-            </div>
-            <Link href="/import"><Button variant="accent">Go to Import Center</Button></Link>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
+function parseExam(value: string | null | undefined): { label: string; days: number } | null {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const exam = new Date(year, month - 1, day);
+  if (exam.getFullYear() !== year || exam.getMonth() !== month - 1 || exam.getDate() !== day) return null;
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const days = Math.round((exam.getTime() - start.getTime()) / 86400000);
+  return { label: `${day} ${MONTHS[month - 1]} ${year}`, days };
 }
 
-function MiniStat({ icon, label, value, loading, accent }: { icon: React.ReactNode; label: string; value: number | string; loading: boolean; accent?: boolean }) {
+function whereFacts(data: Dashboard): ExamFact[] {
+  const facts: ExamFact[] = [];
+  if (typeof data.targetBand === "number") facts.push({ label: "Target band", value: String(data.targetBand) });
+  const exam = parseExam(data.examDate);
+  if (!exam) return facts;
+  facts.push({ label: "Exam", value: exam.label });
+  if (exam.days > 1) facts.push({ label: "Days left", value: `${exam.days} days` });
+  else if (exam.days === 1) facts.push({ label: "Days left", value: "1 day" });
+  else if (exam.days === 0) facts.push({ label: "Days left", value: "Today" });
+  else facts.push({ label: "Days left", value: "Passed" });
+  return facts;
+}
+
+function countLabel(count: number, one: string, many: string) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+export default function DashboardPage() {
+  const { data, loading, error } = useApiData<Dashboard>("/dashboard");
+  const { data: step, loading: stepLoading } = useApiData<PrepStep>("/orientation");
+
+  if (loading || stepLoading) {
+    return (
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Skeleton className="h-16 lg:col-span-3" />
+        <Skeleton className="h-28" />
+        <Skeleton className="h-28" />
+        <Skeleton className="h-28" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return <p className="text-sm text-destructive">{error || "Could not read your progress."}</p>;
+  }
+
+  const facts = whereFacts(data);
+  const library = data.library ?? data.totalWords + data.totalPhrases + data.totalPatterns;
+  const studied = data.studied ?? data.learning + data.mastered;
+  const names = data.sourceNames ?? [];
+  const extraSources = data.moreSources ?? 0;
+  const statuses = [
+    { label: "New", value: data.cardsNew ?? 0 },
+    { label: "Learning", value: data.learning },
+    { label: "Due", value: data.dueToday },
+    { label: "Mastered", value: data.mastered },
+  ];
+  const primary = step?.action && step.href ? step : null;
+  const others = CHOICES.filter((choice) => choice.href !== primary?.href);
+  const studiedShare = library > 0 ? Math.min(100, Math.round((studied / library) * 100)) : null;
+
   return (
-    <div className={`rounded-lg border p-4 ${accent ? "border-accent/40 bg-accent/5" : ""}`}>
-      <div className="mb-2 flex items-center gap-2 text-muted-foreground">{icon}<span className="text-sm">{label}</span></div>
-      {loading ? <Skeleton className="h-7 w-12" /> : <p className="text-2xl font-bold">{value}</p>}
+    <div className="grid gap-3 pb-8 lg:grid-cols-3 lg:items-start">
+      {facts.length > 0 && (
+        <section aria-label="Where you are" data-home-where className="lg:col-span-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Where you are</h2>
+          <dl className="mt-2 grid grid-cols-3 gap-2">
+            {facts.map((fact) => (
+              <div key={fact.label} className="min-w-0 rounded-lg border px-3 py-2">
+                <dt className="truncate text-[11px] text-muted-foreground">{fact.label}</dt>
+                <dd className="truncate text-sm font-semibold">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      <section aria-label="Library" data-home-library className="rounded-lg border p-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Library</h2>
+        <p className="mt-2 text-sm leading-6">
+          <Link href="/import" className="whitespace-nowrap font-medium underline-offset-2 hover:underline">{countLabel(data.totalSources, "source", "sources")}</Link>
+          <span className="text-muted-foreground"> · </span>
+          <Link href="/vocabulary" className="whitespace-nowrap font-medium underline-offset-2 hover:underline">{countLabel(data.totalWords, "word", "words")}</Link>
+          <span className="text-muted-foreground"> · </span>
+          <Link href="/phrases" className="whitespace-nowrap font-medium underline-offset-2 hover:underline">{countLabel(data.totalPhrases, "phrase", "phrases")}</Link>
+          <span className="text-muted-foreground"> · </span>
+          <Link href="/patterns" className="whitespace-nowrap font-medium underline-offset-2 hover:underline">{countLabel(data.totalPatterns, "pattern", "patterns")}</Link>
+        </p>
+        {names.length > 0 && (
+          <p className="mt-2 text-sm leading-5 text-muted-foreground">
+            {names.join(" · ")}
+            {extraSources > 0 ? ` · +${extraSources} more` : ""}
+          </p>
+        )}
+      </section>
+
+      <section aria-label="Progress" data-home-progress className="rounded-lg border p-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Progress</h2>
+        <ul className="mt-2 grid grid-cols-4 gap-1 text-center">
+          {statuses.map((status) => (
+            <li key={status.label} className="min-w-0">
+              <span className="block text-base font-semibold tabular-nums">{status.value}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{status.label}</span>
+            </li>
+          ))}
+        </ul>
+        {studiedShare !== null && (
+          <div className="mt-3">
+            <p className="text-sm">Studied {studied} of {library}</p>
+            <div
+              className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary"
+              role="img"
+              aria-label={`Studied ${studied} of ${library}`}
+            >
+              <div className="h-full bg-primary" style={{ width: `${studiedShare}%` }} />
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section aria-label="What to do now" data-home-next className="rounded-lg border p-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next</h2>
+        {primary?.detail && <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">{primary.detail}</p>}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {primary && (
+            <Link href={primary.href}>
+              <Button className="h-9">{primary.action}</Button>
+            </Link>
+          )}
+          {others.map((choice) => (
+            <Link key={choice.href} href={choice.href}>
+              <Button variant="outline" className="h-9">{choice.label}</Button>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
