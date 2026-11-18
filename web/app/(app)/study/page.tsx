@@ -308,7 +308,7 @@ export default function StudyPage() {
     <div
       role="status"
       className={cn(
-        "pointer-events-none fixed right-4 top-[calc(var(--app-topbar-height)+0.75rem)] z-40 flex max-w-[16rem] items-center gap-2 rounded-full border bg-card/95 px-3 py-1.5 text-sm shadow-lg",
+        "pointer-events-none fixed right-4 top-[calc(var(--app-topbar-height)+0.75rem)] z-40 flex max-w-[16rem] items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm",
         toast.tone === "success" ? "border-success/40" : "border-destructive/40",
       )}
     >
@@ -359,7 +359,7 @@ export default function StudyPage() {
         {forwardButton && <div className="absolute right-0 top-0">{forwardButton}</div>}
         <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
           <PartyPopper className="h-14 w-14 text-accent" />
-          <h2 className="text-2xl font-bold">{reviewed ? "Session complete!" : "Nothing due right now"}</h2>
+          <h2 className="text-xl font-semibold">{reviewed ? "Session complete!" : "Nothing due right now"}</h2>
           <p className="text-muted-foreground">
             {reviewed ? `You reviewed ${reviewed} card${reviewed === 1 ? "" : "s"}. Great work.` : "Add items to study from the Vocabulary, Phrases or Patterns pages, or check back later."}
           </p>
@@ -411,13 +411,13 @@ export default function StudyPage() {
           <Card className="min-h-[280px] sm:min-h-[320px]">
             <CardContent className="flex min-h-[280px] flex-col items-center justify-center gap-4 p-5 text-center sm:min-h-[320px] sm:p-8">
               <Badge variant="secondary">{current.type.replace("_", " ")}</Badge>
-              <p className="max-w-full break-words text-2xl font-bold sm:text-3xl">{current.front}</p>
+              <p className="max-w-full break-words text-2xl font-semibold">{current.front}</p>
               <div className="flex items-center justify-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-1.5 px-2.5"
+                  className="gap-1.5 px-2.5"
                   data-pronounce=""
                   aria-label={`Play pronunciation of ${current.front}`}
                   onClick={() => speak(current.front, { force: true })}
@@ -428,7 +428,7 @@ export default function StudyPage() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 gap-1.5 px-2.5 text-muted-foreground"
+                  className="gap-1.5 px-2.5 text-muted-foreground"
                   disabled={reporting}
                   aria-label="Report and remove this card"
                   onClick={reportCard}
@@ -446,7 +446,7 @@ export default function StudyPage() {
                     <div className="flex flex-wrap gap-1.5">{current.back.collocations.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}</div>
                   )}
                   {!!current.back.examples?.length && (
-                    <ul className="space-y-1.5">{current.back.examples.filter(Boolean).map((e, i) => <li key={i} className="rounded-md bg-secondary/50 p-2 text-sm">{e}</li>)}</ul>
+                    <ul className="space-y-1.5">{current.back.examples.filter(Boolean).map((e, i) => <li key={i} className="rounded-lg bg-secondary/50 p-2 text-sm">{e}</li>)}</ul>
                   )}
                   {current.back.notes && <p className="text-sm text-muted-foreground">{current.back.notes}</p>}
                   <div className="space-y-2 border-t pt-3">
@@ -463,7 +463,7 @@ export default function StudyPage() {
                           <div className="flex flex-wrap gap-1.5">{translation.collocations.map((c) => <Badge key={c} variant="outline">{c}</Badge>)}</div>
                         )}
                         {!!translation.examples?.length && (
-                          <ul className="space-y-1.5">{translation.examples.map((example, i) => <li key={i} className="rounded-md bg-secondary/50 p-2 text-sm">{example}</li>)}</ul>
+                          <ul className="space-y-1.5">{translation.examples.map((example, i) => <li key={i} className="rounded-lg bg-secondary/50 p-2 text-sm">{example}</li>)}</ul>
                         )}
                         {translation.notes && <p className="text-sm text-muted-foreground">{translation.notes}</p>}
                       </div>

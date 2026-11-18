@@ -43,7 +43,7 @@ export default function ProgressPage() {
   const hasReviews = data.totalReviews > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Total reviews (30d)" value={data.totalReviews} />
         <Stat label="Review accuracy" value={`${data.accuracy}%`} />
@@ -128,7 +128,7 @@ export default function ProgressPage() {
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <Card><CardContent className="p-6"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-3xl font-bold">{value}</p></CardContent></Card>
+    <Card><CardContent className="p-4"><p className="section-label">{label}</p><p className="mt-2 text-xl font-semibold tabular-nums">{value}</p></CardContent></Card>
   );
 }
 function Empty({ children }: { children: React.ReactNode }) {

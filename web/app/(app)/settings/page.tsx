@@ -76,7 +76,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="page-stack">
       <Card>
         <CardHeader>
           <CardTitle>AI provider</CardTitle>
@@ -132,13 +132,15 @@ export default function SettingsPage() {
             {MODULES.map((m) => {
               const active = focusModules.includes(m);
               return (
-                <button
+                <Button
                   key={m}
+                  type="button"
+                  size="sm"
+                  variant={active ? "default" : "outline"}
                   onClick={() => toggleModule(m)}
-                  className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : "hover:bg-secondary"}`}
                 >
                   {m}
-                </button>
+                </Button>
               );
             })}
           </div>

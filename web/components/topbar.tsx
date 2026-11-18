@@ -12,8 +12,8 @@ import { useOrientationHidden } from "@/components/orientation-visibility";
 
 function pageTitleClass(orientationHidden: boolean) {
   return cn(
-    "min-w-0 truncate font-semibold",
-    orientationHidden ? "text-lg" : "max-md:sr-only md:max-w-[9rem] md:text-base lg:max-w-[14rem] lg:text-lg",
+    "min-w-0 truncate text-base font-semibold",
+    orientationHidden ? "" : "max-md:sr-only md:max-w-[9rem] lg:max-w-[14rem]",
   );
 }
 
@@ -27,7 +27,7 @@ export function Topbar({ onMenu, title }: { onMenu: () => void; title: string })
     <header className="sticky top-0 z-30 shrink-0 border-b bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
       <div className="pt-safe px-safe">
         <div className="flex h-16 items-center gap-1.5 px-2 md:gap-2 md:px-4">
-          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 lg:hidden md:h-10 md:w-10" onClick={onMenu} aria-label="Menu">
+          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 lg:hidden" onClick={onMenu} aria-label="Menu">
             <Menu className="h-5 w-5" />
           </Button>
           <h1 className={pageTitleClass(orientationHidden)}>{title}</h1>
@@ -39,7 +39,7 @@ export function Topbar({ onMenu, title }: { onMenu: () => void; title: string })
               onClick={toggleSpeak}
               aria-pressed={speakOn}
               aria-label={speakOn ? "Stop reading cards aloud" : "Read cards aloud"}
-              className="h-9 w-9 md:h-10 md:w-10"
+              className="h-9 w-9"
             >
               <span className="relative inline-flex">
                 <Volume2 className="h-5 w-5" />
@@ -51,7 +51,7 @@ export function Topbar({ onMenu, title }: { onMenu: () => void; title: string })
                 )}
               </span>
             </Button>
-            <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme" className="h-9 w-9 md:h-10 md:w-10">
+            <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme" className="h-9 w-9">
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
             <Dropdown

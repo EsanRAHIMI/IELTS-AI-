@@ -13,15 +13,15 @@ import { MobileTabBar } from "@/components/mobile-tab-bar";
 import { OrientationVisibility } from "@/components/orientation-visibility";
 
 const TITLES: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/import": "Import Center",
-  "/vocabulary": "Vocabulary Ranker",
-  "/phrases": "Phrases & Collocations",
-  "/patterns": "Sentence Patterns",
-  "/study": "Study Mode",
-  "/daily-plan": "Daily Plan",
-  "/quiz": "Quiz Mode",
-  "/progress": "Progress",
+  "/dashboard": "Home",
+  "/import": "Sources",
+  "/vocabulary": "Words",
+  "/phrases": "Phrases",
+  "/patterns": "Patterns",
+  "/study": "Study",
+  "/daily-plan": "Daily plan",
+  "/quiz": "Quiz",
+  "/progress": "Stats",
   "/settings": "Settings",
 };
 
@@ -68,21 +68,22 @@ function AppShell({
   const { canShow: showPwaBanner } = usePwaInstallContext();
 
   return (
-    <div className="flex min-h-app overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
         <Sidebar />
       </aside>
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen} side="left" className="max-w-[16rem] p-0">
         <Sidebar onNavigate={() => setMobileOpen(false)} />
       </Sheet>
-      <div className="flex min-h-app min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <OrientationVisibility>
           <Topbar onMenu={() => setMobileOpen(true)} title={title} />
           <main
             className={cn(
-              "flex-1 overflow-y-auto overflow-x-clip py-4 px-page md:p-6 lg:p-8",
-              "pb-mobile-nav",
-              showPwaBanner && "max-lg:pb-[calc(var(--mobile-tab-bar-offset)+7.5rem)]",
+              "min-h-0 flex-1 overflow-y-auto overflow-x-clip px-page py-4 md:px-6 md:py-6 lg:px-8 lg:py-6",
+              showPwaBanner
+                ? "mb-[calc(var(--tab-bar-clearance)+7.5rem)]"
+                : "mb-[var(--tab-bar-clearance)]",
             )}
           >
             <div className="mx-auto min-w-0 max-w-6xl">{children}</div>

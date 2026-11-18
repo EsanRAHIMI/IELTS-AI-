@@ -70,17 +70,17 @@ export default function PatternsPage() {
           <Card key={p.id}>
             <CardContent className="p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <Badge variant="accent" className="max-w-full truncate text-[10px]">{p.category}</Badge>
+                <Badge variant="accent" className="max-w-full truncate">{p.category}</Badge>
                 <span className={cn("inline-flex h-7 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold", priorityColor(p.priorityScore))}>{p.priorityScore}</span>
               </div>
               <p className="mt-3 break-words font-medium leading-relaxed">{p.template}</p>
               {p.sentence && p.sentence !== p.template && (
-                <p className="mt-2 break-words rounded-md bg-secondary/50 p-2 text-sm italic text-muted-foreground">e.g. {p.sentence}</p>
+                <p className="mt-2 break-words rounded-lg bg-secondary/50 p-2 text-sm italic text-muted-foreground">e.g. {p.sentence}</p>
               )}
               {p.notes && <p className="mt-2 break-words text-sm text-muted-foreground">{p.notes}</p>}
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Button size="sm" variant="outline" className="h-9 flex-1 gap-1.5" onClick={() => addToStudy(p)}><Plus className="h-3.5 w-3.5" /> Study</Button>
-                <Button size="sm" variant="ghost" className="h-9 flex-1 gap-1.5" onClick={() => copy(p.template)}><Copy className="h-3.5 w-3.5" /> Copy</Button>
+                <Button size="sm" variant="outline" className="flex-1" onClick={() => addToStudy(p)}><Plus className="h-3.5 w-3.5" /> Study</Button>
+                <Button size="sm" variant="ghost" className="flex-1" onClick={() => copy(p.template)}><Copy className="h-3.5 w-3.5" /> Copy</Button>
               </div>
             </CardContent>
           </Card>

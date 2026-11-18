@@ -37,7 +37,7 @@ export function Tabs({
 export const TabsList = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex w-full min-w-0 items-center gap-0.5 rounded-xl bg-secondary/90 p-1",
+      "flex w-full min-w-0 items-center gap-0.5 rounded-lg bg-secondary p-1",
       "overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
       className,
     )}
@@ -56,7 +56,7 @@ export function TabsTrigger({ value, className, children }: { value: string; cla
       aria-selected={active}
       onClick={() => ctx.setValue(value)}
       className={cn(
-        "inline-flex min-h-9 min-w-0 flex-1 items-center justify-center rounded-lg px-2 py-2 text-xs font-medium transition-all sm:text-sm",
+        "inline-flex h-9 min-w-0 flex-1 items-center justify-center rounded-md px-2 text-sm font-medium transition-all",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
         className,

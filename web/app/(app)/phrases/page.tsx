@@ -63,16 +63,16 @@ export default function PhrasesPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="break-words font-semibold leading-snug">{p.phrase}</p>
-                  <Badge variant="secondary" className="mt-1 max-w-full truncate text-[10px]">{p.section}</Badge>
+                  <Badge variant="secondary" className="mt-1 max-w-full truncate">{p.section}</Badge>
                 </div>
                 <span className={cn("inline-flex h-7 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold", priorityColor(p.priorityScore))}>{p.priorityScore}</span>
               </div>
               {p.simpleEnglishMeaning && <p className="mt-2 break-words text-sm text-muted-foreground">{p.simpleEnglishMeaning}</p>}
               {p.persianMeaning && <p className="farsi mt-1 break-words text-sm">{p.persianMeaning}</p>}
-              {!!p.examples?.length && <p className="mt-2 break-words rounded-md bg-secondary/50 p-2 text-sm italic">{p.examples[0]}</p>}
+              {!!p.examples?.length && <p className="mt-2 break-words rounded-lg bg-secondary/50 p-2 text-sm italic">{p.examples[0]}</p>}
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Button size="sm" variant="outline" className="h-9 flex-1 gap-1.5" onClick={() => addToStudy(p)}><Plus className="h-3.5 w-3.5" /> Study</Button>
-                <Button size="sm" variant="ghost" className="h-9 flex-1 gap-1.5" onClick={() => regenerate(p)}><RefreshCw className="h-3.5 w-3.5" /> Regenerate</Button>
+                <Button size="sm" variant="outline" className="flex-1" onClick={() => addToStudy(p)}><Plus className="h-3.5 w-3.5" /> Study</Button>
+                <Button size="sm" variant="ghost" className="flex-1" onClick={() => regenerate(p)}><RefreshCw className="h-3.5 w-3.5" /> Regenerate</Button>
               </div>
             </CardContent>
           </Card>

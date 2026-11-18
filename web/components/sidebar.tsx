@@ -17,15 +17,15 @@ import {
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/import", label: "Import Center", icon: Upload },
-  { href: "/vocabulary", label: "Vocabulary", icon: BookText },
+  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/import", label: "Sources", icon: Upload },
+  { href: "/vocabulary", label: "Words", icon: BookText },
   { href: "/phrases", label: "Phrases", icon: Quote },
-  { href: "/patterns", label: "Sentence Patterns", icon: Layers },
-  { href: "/study", label: "Study Mode", icon: GraduationCap },
-  { href: "/daily-plan", label: "Daily Plan", icon: CalendarDays },
+  { href: "/patterns", label: "Patterns", icon: Layers },
+  { href: "/study", label: "Study", icon: GraduationCap },
+  { href: "/daily-plan", label: "Daily plan", icon: CalendarDays },
   { href: "/quiz", label: "Quiz", icon: ListChecks },
-  { href: "/progress", label: "Progress", icon: TrendingUp },
+  { href: "/progress", label: "Stats", icon: TrendingUp },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -47,7 +47,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >

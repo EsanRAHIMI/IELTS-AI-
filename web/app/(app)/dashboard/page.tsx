@@ -91,14 +91,14 @@ export default function DashboardPage() {
   const studiedShare = library > 0 ? Math.min(100, Math.round((studied / library) * 100)) : null;
 
   return (
-    <div className="grid gap-3 pb-8 lg:grid-cols-3 lg:items-start">
+    <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
       {facts.length > 0 && (
         <section aria-label="Where you are" data-home-where className="lg:col-span-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Where you are</h2>
+          <h2 className="section-label">Where you are</h2>
           <dl className="mt-2 grid grid-cols-3 gap-2">
             {facts.map((fact) => (
-              <div key={fact.label} className="min-w-0 rounded-lg border px-3 py-2">
-                <dt className="truncate text-[11px] text-muted-foreground">{fact.label}</dt>
+              <div key={fact.label} className="min-w-0 rounded-lg border bg-card px-3 py-2 shadow-sm">
+                <dt className="truncate text-xs text-muted-foreground">{fact.label}</dt>
                 <dd className="truncate text-sm font-semibold">{fact.value}</dd>
               </div>
             ))}
@@ -106,8 +106,8 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section aria-label="Library" data-home-library className="rounded-lg border p-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Library</h2>
+      <section aria-label="Library" data-home-library className="rounded-lg border bg-card p-4 shadow-sm">
+        <h2 className="section-label">Library</h2>
         <p className="mt-2 text-sm leading-6">
           <Link href="/import" className="whitespace-nowrap font-medium underline-offset-2 hover:underline">{countLabel(data.totalSources, "source", "sources")}</Link>
           <span className="text-muted-foreground"> · </span>
@@ -125,13 +125,13 @@ export default function DashboardPage() {
         )}
       </section>
 
-      <section aria-label="Progress" data-home-progress className="rounded-lg border p-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Progress</h2>
+      <section aria-label="Progress" data-home-progress className="rounded-lg border bg-card p-4 shadow-sm">
+        <h2 className="section-label">Progress</h2>
         <ul className="mt-2 grid grid-cols-4 gap-1 text-center">
           {statuses.map((status) => (
             <li key={status.label} className="min-w-0">
               <span className="block text-base font-semibold tabular-nums">{status.value}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">{status.label}</span>
+              <span className="block truncate text-xs text-muted-foreground">{status.label}</span>
             </li>
           ))}
         </ul>
@@ -149,18 +149,18 @@ export default function DashboardPage() {
         )}
       </section>
 
-      <section aria-label="What to do now" data-home-next className="rounded-lg border p-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next</h2>
+      <section aria-label="What to do now" data-home-next className="rounded-lg border bg-card p-4 shadow-sm">
+        <h2 className="section-label">Next</h2>
         {primary?.detail && <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">{primary.detail}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {primary && (
             <Link href={primary.href}>
-              <Button className="h-9">{primary.action}</Button>
+              <Button>{primary.action}</Button>
             </Link>
           )}
           {others.map((choice) => (
             <Link key={choice.href} href={choice.href}>
-              <Button variant="outline" className="h-9">{choice.label}</Button>
+              <Button variant="outline">{choice.label}</Button>
             </Link>
           ))}
         </div>
