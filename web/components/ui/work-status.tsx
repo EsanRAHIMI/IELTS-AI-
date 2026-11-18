@@ -68,7 +68,7 @@ export function WorkStatus({
         <button
           type="button"
           onClick={onDismiss}
-          className="shrink-0 text-muted-foreground hover:text-foreground"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground lg:h-8 lg:w-8"
           aria-label="Dismiss status"
         >
           <X className="h-4 w-4" />

@@ -71,8 +71,8 @@ export default function PhrasesPage() {
               {p.persianMeaning && <p className="farsi mt-1 break-words text-sm">{p.persianMeaning}</p>}
               {!!p.examples?.length && <p className="mt-2 break-words rounded-lg bg-secondary/50 p-2 text-sm italic">{p.examples[0]}</p>}
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Button size="sm" variant="outline" className="flex-1" onClick={() => addToStudy(p)}><Plus className="h-3.5 w-3.5" /> Study</Button>
-                <Button size="sm" variant="ghost" className="flex-1" onClick={() => regenerate(p)}><RefreshCw className="h-3.5 w-3.5" /> Regenerate</Button>
+                <Button size="sm" variant="outline" className="w-full sm:flex-1" onClick={() => addToStudy(p)}><Plus className="h-3.5 w-3.5" /> Study</Button>
+                <Button size="sm" variant="ghost" className="w-full sm:flex-1" onClick={() => regenerate(p)}><RefreshCw className="h-3.5 w-3.5" /> Regenerate</Button>
               </div>
             </CardContent>
           </Card>

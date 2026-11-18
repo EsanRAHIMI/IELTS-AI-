@@ -184,7 +184,7 @@ export default function QuizPage() {
                         onClick={() => choose(opt)}
                         disabled={!!selected}
                         className={cn(
-                          "flex items-center justify-between gap-3 rounded-lg border p-3 text-left text-sm transition-colors",
+                          "flex min-h-11 items-center justify-between gap-3 rounded-lg border p-3 text-left text-sm transition-colors",
                           !selected && "hover:bg-secondary",
                           selected && isCorrect && "border-success bg-success/10",
                           selected && isChosen && !isCorrect && "border-destructive bg-destructive/10",

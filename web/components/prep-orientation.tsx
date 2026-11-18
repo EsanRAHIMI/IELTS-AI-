@@ -89,20 +89,20 @@ export function PrepOrientation() {
     <section
       aria-label="Where you are"
       data-prep-stage={step?.stage ?? (failed ? "error" : "loading")}
-      className="flex min-w-0 flex-1 items-center gap-1.5"
+      className="flex w-full min-w-0 items-center gap-2"
     >
       <time dateTime={clock.iso || undefined} data-local-time className="shrink-0 text-sm font-semibold tabular-nums">
         {clock.time || "—"}
         {clock.zone ? <span className="ml-1 hidden font-medium text-muted-foreground sm:inline"> {clock.zone}</span> : null}
       </time>
-      <span className="min-w-0 truncate text-sm font-semibold">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
       {showAction ? (
         <Link
           href={href}
           title={detail}
           aria-label={`${action}. ${detail}`}
           data-orientation-action=""
-          className="ml-auto inline-flex h-9 min-w-0 max-w-[46%] items-center truncate rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground sm:max-w-[14rem]"
+          className="ml-auto inline-flex h-11 max-w-[11rem] shrink-0 items-center truncate rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground lg:h-9 lg:max-w-[14rem]"
         >
           {action}
         </Link>

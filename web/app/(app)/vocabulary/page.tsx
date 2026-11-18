@@ -193,7 +193,7 @@ function WordMobileCard({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 {w.important && <Star className="h-4 w-4 shrink-0 fill-accent text-accent" />}
-                <span className="truncate text-lg font-semibold">{w.word}</span>
+                <span className="truncate text-base font-semibold">{w.word}</span>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">{w.partOfSpeech} · freq {w.frequency}</p>
             </div>
@@ -291,8 +291,8 @@ function WordDetailSheet({ id, onClose, onChanged }: { id: string | null; onClos
 
             {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
             <div className="flex flex-col gap-2 pt-2 sm:flex-row">
-              <Button onClick={addToStudy} className="flex-1 gap-2"><Plus className="h-4 w-4" /> Add to flashcards</Button>
-              <Button variant="outline" onClick={regenerate} disabled={busy} className="flex-1 gap-2 sm:flex-none"><RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Regenerate</Button>
+              <Button onClick={addToStudy} className="w-full gap-2 sm:flex-1"><Plus className="h-4 w-4" /> Add to flashcards</Button>
+              <Button variant="outline" onClick={regenerate} disabled={busy} className="w-full gap-2 sm:w-auto"><RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Regenerate</Button>
             </div>
           </div>
         )}

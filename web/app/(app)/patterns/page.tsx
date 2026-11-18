@@ -79,8 +79,8 @@ export default function PatternsPage() {
               )}
               {p.notes && <p className="mt-2 break-words text-sm text-muted-foreground">{p.notes}</p>}
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Button size="sm" variant="outline" className="flex-1" onClick={() => addToStudy(p)}><Plus className="h-3.5 w-3.5" /> Study</Button>
-                <Button size="sm" variant="ghost" className="flex-1" onClick={() => copy(p.template)}><Copy className="h-3.5 w-3.5" /> Copy</Button>
+                <Button size="sm" variant="outline" className="w-full sm:flex-1" onClick={() => addToStudy(p)}><Plus className="h-3.5 w-3.5" /> Study</Button>
+                <Button size="sm" variant="ghost" className="w-full sm:flex-1" onClick={() => copy(p.template)}><Copy className="h-3.5 w-3.5" /> Copy</Button>
               </div>
             </CardContent>
           </Card>

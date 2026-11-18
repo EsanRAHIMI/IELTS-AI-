@@ -52,8 +52,8 @@ export default function WordDetailPage() {
           </div>
           {notice && <WorkStatus className="w-full sm:max-w-sm" phase={notice.phase} title={notice.title} detail={notice.detail} />}
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <Button onClick={addToStudy} className="h-10 flex-1 gap-2 sm:flex-none"><Plus className="h-4 w-4" /> Study</Button>
-            <Button variant="outline" onClick={regenerate} disabled={busy} className="h-10 flex-1 gap-2 sm:flex-none"><RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Regenerate</Button>
+            <Button onClick={addToStudy} className="w-full gap-2 sm:w-auto"><Plus className="h-4 w-4" /> Study</Button>
+            <Button variant="outline" onClick={regenerate} disabled={busy} className="w-full gap-2 sm:w-auto"><RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Regenerate</Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">

@@ -29,8 +29,8 @@ export function Sheet({
         )}
       >
         <button
-          className="absolute right-4 z-10 text-muted-foreground hover:text-foreground"
-          style={{ top: "calc(1rem + var(--safe-top))" }}
+          className="absolute right-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
+          style={{ top: "calc(0.5rem + var(--safe-top))" }}
           onClick={() => onOpenChange(false)}
           aria-label="Close"
         >

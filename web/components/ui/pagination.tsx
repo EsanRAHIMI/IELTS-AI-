@@ -23,13 +23,13 @@ export function Pagination({
         {total.toLocaleString()} {label}
       </span>
       <div className="flex items-center justify-center gap-2">
-        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label="Previous page">
+        <Button variant="outline" size="sm" className="min-w-11 px-0" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label="Previous page">
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <span className="min-w-[5.5rem] text-center text-sm tabular-nums">
           {page} / {totalPages}
         </span>
-        <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} aria-label="Next page">
+        <Button variant="outline" size="sm" className="min-w-11 px-0" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} aria-label="Next page">
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>

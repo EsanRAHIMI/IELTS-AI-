@@ -32,7 +32,7 @@ export function Dialog({
         )}
       >
         <button
-          className="absolute right-4 top-4 z-10 text-muted-foreground hover:text-foreground"
+          className="absolute right-2 top-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
           onClick={() => onOpenChange(false)}
           aria-label="Close"
         >

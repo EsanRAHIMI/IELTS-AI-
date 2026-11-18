@@ -52,7 +52,7 @@ export default function ProgressPage() {
 
       <Card>
         <CardHeader><CardTitle>Review activity & accuracy</CardTitle></CardHeader>
-        <CardContent className="h-72">
+        <CardContent className="h-72 min-w-0 overflow-hidden">
           {hasReviews ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.timeline}>
@@ -63,8 +63,8 @@ export default function ProgressPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" width={36} />
                 <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
                 <Area type="monotone" dataKey="reviews" stroke="hsl(var(--primary))" fill="url(#rev)" name="Reviews" />
                 <Area type="monotone" dataKey="accuracy" stroke="hsl(var(--accent))" fillOpacity={0} name="Accuracy %" />
@@ -79,11 +79,11 @@ export default function ProgressPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Card status distribution</CardTitle></CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0 overflow-hidden">
             {pieData.some((d) => d.value > 0) ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={72}>
                     {pieData.map((d) => <Cell key={d.name} fill={STATUS_COLORS[d.name] || "#999"} />)}
                   </Pie>
                   <Legend />
@@ -98,19 +98,19 @@ export default function ProgressPage() {
 
         <Card>
           <CardHeader><CardTitle>Source coverage</CardTitle></CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0 overflow-hidden">
             {data.sourceCoverage.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.sourceCoverage.slice(0, 8)} layout="vertical" margin={{ left: 4, right: 8 }}>
+                <BarChart data={data.sourceCoverage.slice(0, 8)} layout="vertical" margin={{ left: 0, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                  <XAxis type="number" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
                   <YAxis
                     type="category"
                     dataKey="title"
-                    width={72}
-                    tick={{ fontSize: 10 }}
+                    width={88}
+                    tick={{ fontSize: 12 }}
                     stroke="hsl(var(--muted-foreground))"
-                    tickFormatter={(v: string) => (v.length > 12 ? `${v.slice(0, 12)}…` : v)}
+                    tickFormatter={(v: string) => (v.length > 14 ? `${v.slice(0, 14)}…` : v)}
                   />
                   <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
                   <Bar dataKey="words" fill="hsl(var(--primary))" name="Words" radius={[0, 4, 4, 0]} />
