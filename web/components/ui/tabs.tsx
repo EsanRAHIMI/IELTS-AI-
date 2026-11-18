@@ -56,7 +56,7 @@ export function TabsTrigger({ value, className, children }: { value: string; cla
       aria-selected={active}
       onClick={() => ctx.setValue(value)}
       className={cn(
-        "inline-flex h-9 min-w-0 flex-1 items-center justify-center rounded-md px-2 text-sm font-medium transition-all",
+        "inline-flex h-11 min-w-0 flex-1 items-center justify-center rounded-md px-2 text-sm font-medium transition-all lg:h-9",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
         className,

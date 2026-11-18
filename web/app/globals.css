@@ -61,8 +61,10 @@
     --mobile-tab-bar-height: 3.25rem;
     --mobile-tab-bar-gap: 0.5rem;
     --mobile-tab-bar-offset: calc(var(--mobile-tab-bar-height) + var(--mobile-tab-bar-gap) + var(--safe-bottom));
-    /* Clearance for page content. The tab bar itself is unchanged. */
-    --tab-bar-clearance: calc(4.5rem + max(1rem, var(--safe-bottom)));
+    /* Space above the floating tab bar. The bar itself is unchanged.
+       5.125rem lines the scroll edge up about 16px above the glass pill. */
+    --tab-bar-clearance: calc(5.125rem + max(1rem, var(--safe-bottom)));
+    --study-grade-clearance: calc(var(--tab-bar-clearance) + 3.75rem);
     --content-bottom-offset: calc(var(--tab-bar-clearance) + 0.75rem);
     --mobile-nav-scrim-height: var(--mobile-tab-bar-offset);
     --ios-tab-active: #007aff;

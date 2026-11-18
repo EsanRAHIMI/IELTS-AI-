@@ -37,7 +37,7 @@ export function DropdownItem({ className, ...props }: React.HTMLAttributes<HTMLB
   return (
     <button
       className={cn(
-        "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm hover:bg-secondary",
+        "flex min-h-11 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary lg:min-h-0",
         className,
       )}
       {...props}

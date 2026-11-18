@@ -56,9 +56,6 @@ function gradeFromEvent(e: KeyboardEvent): string | null {
   return GRADE_BY_CODE[e.code] || GRADE_BY_KEY[e.key] || null;
 }
 
-const TAB_CLEARANCE = "calc(4.75rem + max(1rem, var(--safe-bottom)))";
-const GRADE_CLEARANCE = "calc(8rem + max(1rem, var(--safe-bottom)))";
-
 export default function StudyPage() {
   const { user } = useAuth();
   const { canShow: showPwaBanner } = usePwaInstallContext();
@@ -373,8 +370,8 @@ export default function StudyPage() {
   }
 
   const glassyGrades = !revealed;
-  const belowTabs = showPwaBanner ? "calc(12.25rem + max(1rem, var(--safe-bottom)))" : TAB_CLEARANCE;
-  const belowGrades = showPwaBanner ? "calc(15.5rem + max(1rem, var(--safe-bottom)))" : GRADE_CLEARANCE;
+  const belowTabs = showPwaBanner ? "calc(var(--tab-bar-clearance) + 7.5rem)" : "var(--tab-bar-clearance)";
+  const belowGrades = showPwaBanner ? "calc(var(--study-grade-clearance) + 7.5rem)" : "var(--study-grade-clearance)";
 
   return (
     <>
@@ -417,7 +414,7 @@ export default function StudyPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 px-2.5"
+                  className="min-w-11 gap-1.5 px-2.5"
                   data-pronounce=""
                   aria-label={`Play pronunciation of ${current.front}`}
                   onClick={() => speak(current.front, { force: true })}
@@ -501,7 +498,7 @@ export default function StudyPage() {
                 aria-pressed={selected}
                 onClick={() => grade(g.key)}
                 className={cn(
-                  "flex h-9 min-w-0 items-center justify-center gap-1 rounded-lg px-1 text-sm font-medium transition-colors",
+                  "flex h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-2 text-sm font-medium transition-colors lg:h-9",
                   glassyGrades
                     ? "border border-foreground/20 bg-foreground/10 text-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.35)] backdrop-blur-md dark:border-white/30 dark:bg-white/10"
                     : g.cls,

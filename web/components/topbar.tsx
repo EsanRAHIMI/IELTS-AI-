@@ -1,5 +1,6 @@
 "use client";
 
+import { useLayoutEffect, useRef } from "react";
 import { Moon, Sun, LogOut, Menu, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -10,36 +11,61 @@ import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import { PrepOrientation } from "@/components/prep-orientation";
 import { useOrientationHidden } from "@/components/orientation-visibility";
 
-function pageTitleClass(orientationHidden: boolean) {
-  return cn(
-    "min-w-0 truncate text-base font-semibold",
-    orientationHidden ? "" : "max-md:sr-only md:max-w-[9rem] lg:max-w-[14rem]",
-  );
-}
-
 export function Topbar({ onMenu, title }: { onMenu: () => void; title: string }) {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const { enabled: speakOn, toggle: toggleSpeak } = useSpeech();
   const orientationHidden = useOrientationHidden();
+  const headerRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const apply = () => {
+      document.documentElement.style.setProperty(
+        "--app-topbar-height",
+        `${Math.ceil(el.getBoundingClientRect().height)}px`,
+      );
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-30 shrink-0 border-b bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80"
+    >
       <div className="pt-safe px-safe">
-        <div className="flex h-16 items-center gap-1.5 px-2 md:gap-2 md:px-4">
-          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 lg:hidden" onClick={onMenu} aria-label="Menu">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-1 px-2 pb-2 pt-1.5 lg:flex lg:h-16 lg:items-center lg:gap-2 lg:px-4 lg:py-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 shrink-0 lg:hidden"
+            onClick={onMenu}
+            aria-label="Menu"
+          >
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className={pageTitleClass(orientationHidden)}>{title}</h1>
-          <PrepOrientation />
-          <div className="ml-auto flex shrink-0 items-center gap-0.5 md:gap-1">
+          <h1 className="min-w-0 truncate text-base font-semibold lg:max-w-[14rem]">{title}</h1>
+          <div
+            className={cn(
+              "col-span-3 min-w-0 lg:col-auto lg:min-w-0 lg:flex-1",
+              orientationHidden ? "hidden" : "lg:flex",
+            )}
+          >
+            <PrepOrientation />
+          </div>
+          <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-0.5 lg:col-auto lg:row-auto lg:gap-1">
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleSpeak}
               aria-pressed={speakOn}
               aria-label={speakOn ? "Stop reading cards aloud" : "Read cards aloud"}
-              className="h-9 w-9"
+              className="h-11 w-11 lg:h-9 lg:w-9"
             >
               <span className="relative inline-flex">
                 <Volume2 className="h-5 w-5" />
@@ -51,12 +77,18 @@ export function Topbar({ onMenu, title }: { onMenu: () => void; title: string })
                 )}
               </span>
             </Button>
-            <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme" className="h-9 w-9">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggle}
+              aria-label="Toggle theme"
+              className="h-11 w-11 lg:h-9 lg:w-9"
+            >
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
             <Dropdown
               trigger={
-                <Button variant="ghost" size="sm" className="gap-2">
+                <Button variant="ghost" size="sm" className="h-11 gap-2 px-2 lg:h-9">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                     {(user?.name || user?.email || "?").charAt(0).toUpperCase()}
                   </span>
