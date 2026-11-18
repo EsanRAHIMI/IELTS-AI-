@@ -188,6 +188,13 @@ async def upload_file(
     try:
         import asyncio
         meta = await asyncio.to_thread(s3_service.upload_file_bytes, key, content, mime)
+    except s3_service.StorageUnavailable:
+        await db.sources().delete_one({"_id": oid(sid)})
+        logger.error("Object storage is not configured")
+        raise HTTPException(
+            503,
+            "File storage is not configured. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_BUCKET.",
+        ) from None
     except Exception:
         await db.sources().delete_one({"_id": oid(sid)})
         logger.exception("Object storage upload failed")
