@@ -18,6 +18,37 @@ logger = logging.getLogger("ielts.s3")
 _client = None
 
 
+def _client_config():
+    """S3 client settings for a coursebook-sized upload.
+
+    boto3's default checksum mode sends PutObject as aws-chunked trailers, which
+    some paths reject, and the default read timeout is 60s. A textbook PDF is
+    already on the API by then, so the browser shows a finished upload and the
+    storage call still dies. Send a normal body, in 8 MB parts, and wait long
+    enough for each part.
+    """
+    from botocore.config import Config
+
+    return Config(
+        connect_timeout=10,
+        read_timeout=300,
+        retries={"max_attempts": 5, "mode": "standard"},
+        request_checksum_calculation="when_required",
+        response_checksum_validation="when_required",
+    )
+
+
+def _transfer_config():
+    from boto3.s3.transfer import TransferConfig
+
+    return TransferConfig(
+        multipart_threshold=8 * 1024 * 1024,
+        multipart_chunksize=8 * 1024 * 1024,
+        max_concurrency=2,
+        use_threads=True,
+    )
+
+
 def _get_client():
     """Lazily create a boto3 S3 client."""
     global _client
@@ -29,6 +60,7 @@ def _get_client():
             region_name=settings.aws_region,
             aws_access_key_id=settings.aws_access_key_id,
             aws_secret_access_key=settings.aws_secret_access_key,
+            config=_client_config(),
         )
     return _client
 
@@ -53,8 +85,14 @@ class StorageUnavailable(RuntimeError):
 def upload_file_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> dict:
     """Upload raw bytes to S3 (or a local dev fallback). Never returns a public URL."""
     if enabled():
-        _get_client().put_object(
-            Bucket=settings.aws_s3_bucket, Key=key, Body=data, ContentType=content_type
+        import io
+
+        _get_client().upload_fileobj(
+            io.BytesIO(data),
+            settings.aws_s3_bucket,
+            key,
+            ExtraArgs={"ContentType": content_type},
+            Config=_transfer_config(),
         )
         logger.info("Uploaded %d bytes to object storage", len(data))
         return {

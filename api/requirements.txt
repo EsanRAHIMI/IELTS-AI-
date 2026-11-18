@@ -21,7 +21,7 @@ openai>=1.59.0,<2
 anthropic>=0.42.0,<1
 python-dotenv>=1.0.1,<2
 email-validator>=2.2.0,<3
-boto3>=1.35.0,<2
+boto3>=1.36.5,<2
 
 # Optional NLP/data extras (better lemmatisation + pandas CSV parsing) live in
 # requirements-nlp.txt. They are NOT required: the extractor falls back to a
