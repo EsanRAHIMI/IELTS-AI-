@@ -133,7 +133,7 @@ export default function QuizPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="page-stack">
       {!answering && (
         <Card data-quiz-setup>
           <CardContent className="flex flex-col gap-3 p-4">
@@ -147,7 +147,7 @@ export default function QuizPage() {
       )}
 
       {!started && !notice && (
-        <Card><CardContent className="p-10 text-center text-muted-foreground">Choose a mode and start a quiz. Questions are generated from your enriched vocabulary.</CardContent></Card>
+        <Card><CardContent className="p-4 text-center text-sm text-muted-foreground">Choose a mode and start a quiz. Questions are generated from your enriched vocabulary.</CardContent></Card>
       )}
 
       {answering && current && (
@@ -157,8 +157,8 @@ export default function QuizPage() {
             "max-lg:fixed max-lg:inset-x-0 max-lg:z-20 max-lg:flex max-lg:flex-col max-lg:bg-background max-lg:px-page max-lg:pb-3 max-lg:pt-3",
             "max-lg:top-[var(--app-topbar-height)]",
             showPwaBanner
-              ? "max-lg:bottom-[calc(5.25rem+max(1rem,var(--safe-bottom))+7.5rem)]"
-              : "max-lg:bottom-[calc(5.25rem+max(1rem,var(--safe-bottom)))]",
+              ? "max-lg:bottom-[calc(var(--content-bottom-offset)+7.5rem)]"
+              : "max-lg:bottom-[var(--content-bottom-offset)]",
           )}
         >
           <motion.div
@@ -168,12 +168,12 @@ export default function QuizPage() {
             className="flex min-h-0 flex-1 flex-col"
           >
             <Card className="flex min-h-0 flex-1 flex-col">
-              <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:gap-5 sm:p-6">
+              <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
                   <span>Question {idx + 1} / {questions.length}</span>
                   <span>Score {score}</span>
                 </div>
-                <p className="text-xl font-semibold">{current.prompt}</p>
+                <p className="text-base font-semibold">{current.prompt}</p>
                 <div className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto">
                   {current.options.map((opt) => {
                     const isCorrect = opt === current.correct;
@@ -184,7 +184,7 @@ export default function QuizPage() {
                         onClick={() => choose(opt)}
                         disabled={!!selected}
                         className={cn(
-                          "flex items-center justify-between gap-3 rounded-md border p-3 text-left text-sm transition-colors",
+                          "flex items-center justify-between gap-3 rounded-lg border p-3 text-left text-sm transition-colors",
                           !selected && "hover:bg-secondary",
                           selected && isCorrect && "border-success bg-success/10",
                           selected && isChosen && !isCorrect && "border-destructive bg-destructive/10",
@@ -210,8 +210,8 @@ export default function QuizPage() {
 
       {finished && (
         <Card>
-          <CardContent className="flex flex-col items-center gap-4 p-10 text-center">
-            <p className="text-4xl font-bold">{score} / {questions.length}</p>
+          <CardContent className="flex flex-col items-center gap-4 p-4 text-center">
+            <p className="text-2xl font-semibold tabular-nums">{score} / {questions.length}</p>
             <p className="text-muted-foreground">{Math.round((score / questions.length) * 100)}% correct</p>
             <Button onClick={() => start(mode)} className="gap-2"><RotateCcw className="h-4 w-4" /> Try again</Button>
           </CardContent>

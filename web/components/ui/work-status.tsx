@@ -60,7 +60,7 @@ export function WorkStatus({
         aria-hidden
       />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{PHASE_LABEL[phase]}</p>
+        <p className="section-label">{PHASE_LABEL[phase]}</p>
         <p className={cn("font-medium leading-snug", compact ? "text-sm" : "text-sm")}>{title}</p>
         {detail && <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{detail}</p>}
       </div>

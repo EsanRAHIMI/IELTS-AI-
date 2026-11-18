@@ -61,6 +61,9 @@
     --mobile-tab-bar-height: 3.25rem;
     --mobile-tab-bar-gap: 0.5rem;
     --mobile-tab-bar-offset: calc(var(--mobile-tab-bar-height) + var(--mobile-tab-bar-gap) + var(--safe-bottom));
+    /* Clearance for page content. The tab bar itself is unchanged. */
+    --tab-bar-clearance: calc(4.5rem + max(1rem, var(--safe-bottom)));
+    --content-bottom-offset: calc(var(--tab-bar-clearance) + 0.75rem);
     --mobile-nav-scrim-height: var(--mobile-tab-bar-offset);
     --ios-tab-active: #007aff;
     --ios-tab-active-dark: #0a84ff;
@@ -134,7 +137,13 @@
     padding-bottom: max(1rem, var(--safe-bottom));
   }
   .pb-mobile-nav {
-    padding-bottom: var(--mobile-tab-bar-offset);
+    padding-bottom: var(--content-bottom-offset);
+  }
+  .pb-mobile-nav-banner {
+    padding-bottom: calc(var(--content-bottom-offset) + 7.5rem);
+  }
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-wide text-muted-foreground;
   }
   .px-page {
     padding-left: max(1rem, var(--safe-left));

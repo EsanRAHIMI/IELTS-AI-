@@ -21,13 +21,13 @@ export function PwaInstallBanner() {
   return (
     <div
       className="fixed inset-x-0 z-30 border-t bg-card/95 px-safe shadow-[0_-8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md lg:hidden"
-      style={{ bottom: "var(--mobile-tab-bar-offset)" }}
+      style={{ bottom: "var(--tab-bar-clearance)" }}
       role="region"
       aria-label="Install app"
     >
       <div className="mx-auto max-w-lg p-4 pb-safe-or-4">
         <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
           <Smartphone className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">

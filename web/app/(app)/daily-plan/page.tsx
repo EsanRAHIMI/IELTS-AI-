@@ -39,25 +39,25 @@ export default function DailyPlanPage() {
   if (!data) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       {notice && <WorkStatus phase={notice.phase} title={notice.title} detail={notice.detail} />}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="border-accent/40 bg-accent/5">
-          <CardContent className="flex items-center gap-3 p-5">
-            <Clock className="h-8 w-8 text-accent" />
-            <div><p className="text-2xl font-bold">{data.estimatedMinutes} min</p><p className="text-sm text-muted-foreground">Estimated time</p></div>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <Clock className="h-5 w-5 text-muted-foreground" />
+            <div><p className="text-xl font-semibold tabular-nums">{data.estimatedMinutes} min</p><p className="text-sm text-muted-foreground">Estimated time</p></div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="flex items-center gap-3 p-5">
-            <CalendarClock className="h-8 w-8 text-muted-foreground" />
-            <div><p className="text-2xl font-bold">{data.dueCards}</p><p className="text-sm text-muted-foreground">Cards due for review</p></div>
+          <CardContent className="flex items-center gap-3 p-4">
+            <CalendarClock className="h-5 w-5 text-muted-foreground" />
+            <div><p className="text-xl font-semibold tabular-nums">{data.dueCards}</p><p className="text-sm text-muted-foreground">Cards due for review</p></div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="text-sm text-muted-foreground">Ready to go?</p><p className="font-semibold">Start your session</p></div>
-            <Link href="/study" className="w-full sm:w-auto"><Button className="h-10 w-full sm:w-auto">Study now</Button></Link>
+            <Link href="/study" className="w-full sm:w-auto"><Button className="w-full sm:w-auto">Study now</Button></Link>
           </CardContent>
         </Card>
       </div>
@@ -73,7 +73,7 @@ export default function DailyPlanPage() {
       <PlanSection title="Words for today" icon={<BookText className="h-5 w-5" />} count={data.words.length} onAdd={() => addAll("word", data.words)}>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {data.words.map((w) => (
-            <div key={w.id} className="flex items-center justify-between gap-2 rounded-md border p-2.5">
+            <div key={w.id} className="flex items-center justify-between gap-2 rounded-lg border p-3">
               <div className="min-w-0">
                 <p className="truncate font-medium">{w.word}</p>
                 {w.persianMeaning && <p className="farsi truncate text-xs text-muted-foreground">{w.persianMeaning}</p>}
@@ -87,9 +87,9 @@ export default function DailyPlanPage() {
       <PlanSection title="Phrases for today" icon={<Quote className="h-5 w-5" />} count={data.phrases.length} onAdd={() => addAll("phrase", data.phrases)}>
         <div className="grid gap-2 sm:grid-cols-2">
           {data.phrases.map((p) => (
-            <div key={p.id} className="rounded-md border p-2.5">
+            <div key={p.id} className="rounded-lg border p-3">
               <p className="font-medium">{p.phrase}</p>
-              <Badge variant="secondary" className="mt-1 text-[10px]">{p.section}</Badge>
+              <Badge variant="secondary" className="mt-1">{p.section}</Badge>
             </div>
           ))}
         </div>
@@ -98,8 +98,8 @@ export default function DailyPlanPage() {
       <PlanSection title="Sentence patterns for today" icon={<Layers className="h-5 w-5" />} count={data.patterns.length} onAdd={() => addAll("sentence_pattern", data.patterns)}>
         <div className="space-y-2">
           {data.patterns.map((p) => (
-            <div key={p.id} className="rounded-md border p-2.5">
-              <Badge variant="accent" className="mb-1 text-[10px]">{p.category}</Badge>
+            <div key={p.id} className="rounded-lg border p-3">
+              <Badge variant="accent" className="mb-1">{p.category}</Badge>
               <p className="text-sm">{p.template}</p>
             </div>
           ))}
@@ -113,8 +113,8 @@ function PlanSection({ title, icon, count, onAdd, children }: { title: string; i
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle className="flex flex-wrap items-center gap-2 text-base sm:text-lg">{icon} {title} <Badge variant="muted">{count}</Badge></CardTitle>
-        {count > 0 && <Button size="sm" variant="outline" className="h-9 w-full gap-1.5 sm:w-auto" onClick={onAdd}><Plus className="h-3.5 w-3.5" /> Add all</Button>}
+        <CardTitle className="flex flex-wrap items-center gap-2">{icon} {title} <Badge variant="muted">{count}</Badge></CardTitle>
+        {count > 0 && <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={onAdd}><Plus className="h-3.5 w-3.5" /> Add all</Button>}
       </CardHeader>
       <CardContent>{count ? children : <p className="text-sm text-muted-foreground">Nothing here yet — import sources or seed data.</p>}</CardContent>
     </Card>

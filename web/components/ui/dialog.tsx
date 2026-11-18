@@ -23,12 +23,12 @@ export function Dialog({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-[var(--content-bottom-offset)] sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={() => onOpenChange(false)} />
       <div
         className={cn(
           "relative z-10 flex max-h-[min(90dvh,720px)] w-full flex-col",
-          "animate-fade-in rounded-t-2xl border bg-card shadow-lg sm:max-w-lg sm:rounded-lg",
+          "animate-fade-in rounded-lg border bg-card shadow-lg sm:max-w-lg",
         )}
       >
         <button
@@ -38,7 +38,7 @@ export function Dialog({
         >
           <X className="h-5 w-5" />
         </button>
-        <div className="overflow-y-auto overscroll-contain px-page py-6 pt-12 sm:p-6 sm:pt-10">{children}</div>
+        <div className="overflow-y-auto overscroll-contain p-4 pt-12">{children}</div>
       </div>
     </div>
   );

@@ -143,7 +143,7 @@ export default function VocabularyPage() {
                     {w.persianMeaning && <span className="farsi block truncate text-xs text-muted-foreground">{w.persianMeaning}</span>}
                   </TableCell>
                   <TableCell className="hidden xl:table-cell">
-                    <div className="flex flex-wrap gap-1">{(w.ieltsUseCases || []).slice(0, 2).map((u) => <Badge key={u} variant="secondary" className="text-[10px]">{u}</Badge>)}</div>
+                    <div className="flex flex-wrap gap-1">{(w.ieltsUseCases || []).slice(0, 2).map((u) => <Badge key={u} variant="secondary">{u}</Badge>)}</div>
                   </TableCell>
                   <TableCell><Badge variant="outline">{w.difficulty}</Badge></TableCell>
                   <TableCell><Badge className={cn("border-0", classNamesForStatus(w.status))}>{w.status}</Badge></TableCell>
@@ -208,17 +208,17 @@ function WordMobileCard({
             </div>
           )}
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <Badge variant="outline" className="text-[10px]">{w.difficulty}</Badge>
-            <Badge className={cn("border-0 text-[10px]", classNamesForStatus(w.status))}>{w.status}</Badge>
+            <Badge variant="outline">{w.difficulty}</Badge>
+            <Badge className={cn("border-0", classNamesForStatus(w.status))}>{w.status}</Badge>
           </div>
         </button>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={onDetail}><Eye className="h-3.5 w-3.5" /> View</Button>
-          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={onStudy}><Plus className="h-3.5 w-3.5" /> Study</Button>
-          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={onImportant}>
+          <Button variant="outline" size="sm" onClick={onDetail}><Eye className="h-3.5 w-3.5" /> View</Button>
+          <Button variant="outline" size="sm" onClick={onStudy}><Plus className="h-3.5 w-3.5" /> Study</Button>
+          <Button variant="outline" size="sm" onClick={onImportant}>
             <Star className={cn("h-3.5 w-3.5", w.important && "fill-accent text-accent")} /> Star
           </Button>
-          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-muted-foreground" onClick={onHide}><EyeOff className="h-3.5 w-3.5" /> Hide</Button>
+          <Button variant="outline" size="sm" className="text-muted-foreground" onClick={onHide}><EyeOff className="h-3.5 w-3.5" /> Hide</Button>
         </div>
       </CardContent>
     </Card>
@@ -256,7 +256,7 @@ function WordDetailSheet({ id, onClose, onChanged }: { id: string | null; onClos
           <div className="min-w-0 space-y-5">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-bold break-words">{word.word}</h2>
+                <h2 className="break-words text-2xl font-semibold">{word.word}</h2>
                 <Badge variant="outline">{word.partOfSpeech}</Badge>
                 <Badge variant="outline">{word.difficulty}</Badge>
               </div>
@@ -275,7 +275,7 @@ function WordDetailSheet({ id, onClose, onChanged }: { id: string | null; onClos
             )}
             {!!word.examples?.length && (
               <Field label="Examples">
-                <ul className="space-y-1.5">{word.examples.map((e, i) => <li key={i} className="rounded-md bg-secondary/50 p-2 text-sm break-words">{e}</li>)}</ul>
+                <ul className="space-y-1.5">{word.examples.map((e, i) => <li key={i} className="break-words rounded-lg bg-secondary/50 p-2 text-sm">{e}</li>)}</ul>
               </Field>
             )}
             {!!word.ieltsUseCases?.length && (

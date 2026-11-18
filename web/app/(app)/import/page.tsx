@@ -209,7 +209,7 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="page-stack pb-8 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
+    <div className="page-stack lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
       <Card>
         <CardHeader><CardTitle>Add a source</CardTitle></CardHeader>
         <CardContent>
@@ -222,12 +222,12 @@ export default function ImportPage() {
 
             <TabsContent value="file">
               <div
-                className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 text-center transition-colors ${busy ? "pointer-events-none opacity-60" : "cursor-pointer hover:border-primary"}`}
+                className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${busy ? "pointer-events-none opacity-60" : "cursor-pointer hover:border-primary"}`}
                 onClick={() => { if (!busy) fileRef.current?.click(); }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); if (!busy && e.dataTransfer.files[0]) submitFile(e.dataTransfer.files[0]); }}
               >
-                <UploadCloud className="h-10 w-10 text-muted-foreground" />
+                <UploadCloud className="h-8 w-8 text-muted-foreground" />
                 <p className="font-medium">Drop a file or click to browse</p>
                 <p className="text-sm text-muted-foreground">PDF, DOCX, TXT, CSV, JSON</p>
                 <input
@@ -328,13 +328,13 @@ export default function ImportPage() {
                 {...sourceWork(s.status, s.status === "error" ? (job?.error || lastLog) : lastLog)}
               />
               <div className="mt-3 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
-                <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setPreviewId(s.id)}>
+                <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setPreviewId(s.id)}>
                   <Eye className="h-3.5 w-3.5" /> Review
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 w-full gap-1 sm:h-8 sm:w-auto"
+                  className="w-full sm:w-auto"
                   aria-pressed={!!s.frozen}
                   disabled={freezingId === s.id}
                   onClick={() => toggleFreeze(s)}
@@ -342,21 +342,21 @@ export default function ImportPage() {
                   <Snowflake className="h-3.5 w-3.5" /> {s.frozen ? "Unfreeze" : "Freeze"}
                 </Button>
                 {s.hasFile && (
-                  <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => download(s.id)}>
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => download(s.id)}>
                     <Download className="h-3.5 w-3.5" /> Original file
                   </Button>
                 )}
-                <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setActiveJob(s.id)}>
+                <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setActiveJob(s.id)}>
                   <FileText className="h-3.5 w-3.5" /> Logs
                 </Button>
-                <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:h-8 sm:w-auto" onClick={() => setReprocessId(s.id)}>
+                <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setReprocessId(s.id)}>
                   <RefreshCw className="h-3.5 w-3.5" /> Reprocess
                 </Button>
                 {["pending", "processing"].includes(s.status) && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-1 text-destructive hover:text-destructive"
+                    className="w-full text-destructive hover:text-destructive sm:w-auto"
                     onClick={() => cancelProcessing(s.id)}
                   >
                     <Square className="h-3.5 w-3.5" /> Stop
@@ -365,7 +365,7 @@ export default function ImportPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-1 text-destructive hover:text-destructive"
+                  className="w-full text-destructive hover:text-destructive sm:w-auto"
                   onClick={() => setDeleteId(s.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Remove
@@ -431,7 +431,7 @@ function JobLogsDialog({ sourceId, onClose }: { sourceId: string | null; onClose
     <Dialog open={!!sourceId} onOpenChange={(v) => !v && onClose()}>
       <DialogHeader><DialogTitle>Extraction logs</DialogTitle></DialogHeader>
       <WorkStatus {...jobWork(job)} className="mb-3" />
-      <div className="max-h-80 space-y-1 overflow-y-auto rounded-md bg-secondary/50 p-3 font-mono text-xs">
+      <div className="max-h-80 space-y-1 overflow-y-auto rounded-lg bg-secondary/50 p-3 font-mono text-xs">
         {job?.logs?.length ? (
           job.logs.map((l, i) => <div key={i}>· {l.msg}</div>)
         ) : (
@@ -452,8 +452,8 @@ function fmtBytes(n?: number) {
 
 function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-md border bg-secondary/30 px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+    <div className="rounded-lg border bg-secondary/30 px-3 py-2">
+      <div className="section-label">{label}</div>
       <div className="text-sm font-medium">{value}</div>
     </div>
   );
@@ -483,7 +483,7 @@ function SourcePreviewDialog({ sourceId, onClose }: { sourceId: string | null; o
             {method === "ocr" && <Badge variant="accent" className="gap-1"><ScanLine className="h-3 w-3" /> OCR Used</Badge>}
             {method === "mixed" && <Badge variant="accent" className="gap-1"><Layers className="h-3 w-3" /> Mixed Extraction</Badge>}
             {quality === "warning" && (
-              <Badge variant="secondary" className="gap-1 bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              <Badge variant="accent" className="gap-1">
                 <AlertTriangle className="h-3 w-3" /> Warning: Low text extracted
               </Badge>
             )}
@@ -516,9 +516,9 @@ function SourcePreviewDialog({ sourceId, onClose }: { sourceId: string | null; o
 
           {/* Warnings */}
           {warnings.length > 0 && (
-            <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
+            <div className="space-y-1 rounded-lg border border-accent/40 bg-accent/10 p-3 text-sm">
               {warnings.map((w, i) => (
-                <div key={i} className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+                <div key={i} className="flex items-start gap-2">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span>{w}</span>
                 </div>
               ))}
@@ -527,8 +527,8 @@ function SourcePreviewDialog({ sourceId, onClose }: { sourceId: string | null; o
 
           {/* Extracted text preview */}
           <div>
-            <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Extracted text (preview)</div>
-            <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-secondary/50 p-3 text-sm leading-relaxed">
+            <div className="section-label mb-1">Extracted text (preview)</div>
+            <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg bg-secondary/50 p-3 text-sm leading-relaxed">
               {(source.rawText || "").trim() || <span className="text-muted-foreground">No extracted text yet.</span>}
             </div>
           </div>
@@ -620,7 +620,7 @@ function DeleteSourceDialog({
       ) : (
         <div className="space-y-4">
           {linked && (linked.words > 0 || linked.phrases > 0 || linked.patterns > 0) && (
-            <div className="rounded-md border bg-secondary/30 p-3 text-sm">
+            <div className="rounded-lg border bg-secondary/30 p-3 text-sm">
               <p className="font-medium">Linked learned items</p>
               <p className="mt-1 text-muted-foreground">
                 {linked.words} words · {linked.phrases} phrases · {linked.patterns} patterns reference this source.
@@ -635,7 +635,7 @@ function DeleteSourceDialog({
           )}
 
           <div className="space-y-2">
-            <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:checked]:border-primary">
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 has-[:checked]:border-primary">
               <input
                 type="radio"
                 name="delete-mode"
@@ -651,7 +651,7 @@ function DeleteSourceDialog({
                 </span>
               </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:checked]:border-primary">
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 has-[:checked]:border-primary">
               <input
                 type="radio"
                 name="delete-mode"
@@ -726,7 +726,7 @@ function ReprocessSourceDialog({
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
-        <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
           <input
             type="checkbox"
             className="mt-1"

@@ -37,14 +37,14 @@ export default function WordDetailPage() {
   if (!word) return <p className="text-sm text-muted-foreground">Word not found.</p>;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="page-stack">
       <Button variant="ghost" size="sm" className="gap-2" onClick={() => router.push("/vocabulary")}><ArrowLeft className="h-4 w-4" /> Back to ranker</Button>
 
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="break-words text-2xl sm:text-3xl">{word.word}</CardTitle>
+              <CardTitle className="break-words text-2xl">{word.word}</CardTitle>
               <Badge variant="outline">{word.partOfSpeech}</Badge>
               <Badge variant="outline">{word.difficulty}</Badge>
             </div>
@@ -60,7 +60,7 @@ export default function WordDetailPage() {
           {word.persianMeaning && <Field label="Persian meaning"><p className="farsi text-lg">{word.persianMeaning}</p></Field>}
           {word.simpleEnglishMeaning && <Field label="Simple English meaning"><p>{word.simpleEnglishMeaning}</p></Field>}
           {!!word.collocations?.length && <Field label="Collocations"><div className="flex flex-wrap gap-2">{word.collocations.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}</div></Field>}
-          {!!word.examples?.length && <Field label="Examples"><ul className="space-y-1.5">{word.examples.map((e, i) => <li key={i} className="rounded-md bg-secondary/50 p-2 text-sm">{e}</li>)}</ul></Field>}
+          {!!word.examples?.length && <Field label="Examples"><ul className="space-y-1.5">{word.examples.map((e, i) => <li key={i} className="rounded-lg bg-secondary/50 p-2 text-sm">{e}</li>)}</ul></Field>}
           {!!word.ieltsUseCases?.length && <Field label="IELTS use cases"><div className="flex flex-wrap gap-2">{word.ieltsUseCases.map((u) => <Badge key={u} variant="accent">{u}</Badge>)}</div></Field>}
           {!!word.commonMistakes?.length && <Field label="Common mistakes"><ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{word.commonMistakes.map((m, i) => <li key={i}>{m}</li>)}</ul></Field>}
           {word.notes && <Field label="AI study notes"><p className="text-sm text-muted-foreground">{word.notes}</p></Field>}
