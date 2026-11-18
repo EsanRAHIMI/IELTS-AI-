@@ -195,10 +195,10 @@ async def upload_file(
             503,
             "File storage is not configured. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_BUCKET.",
         ) from None
-    except Exception:
+    except Exception as exc:
         await db.sources().delete_one({"_id": oid(sid)})
         logger.exception("Object storage upload failed")
-        raise HTTPException(502, "File storage failed") from None
+        raise HTTPException(502, s3_service.public_failure_detail(exc)) from None
 
     # 3) persist object metadata (NOT the binary, and NOT a public URL) on the source
     await db.sources().update_one({"_id": oid(sid)}, {"$set": {

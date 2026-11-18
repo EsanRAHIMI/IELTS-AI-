@@ -23,29 +23,17 @@ def _client_config():
 
     boto3's default checksum mode sends PutObject as aws-chunked trailers, which
     some paths reject, and the default read timeout is 60s. A textbook PDF is
-    already on the API by then, so the browser shows a finished upload and the
-    storage call still dies. Send a normal body, in 8 MB parts, and wait long
-    enough for each part.
+    already on the API by then. Send one normal PutObject, the same call that
+    stores a text file, and wait long enough for the whole body.
     """
     from botocore.config import Config
 
     return Config(
         connect_timeout=10,
-        read_timeout=300,
-        retries={"max_attempts": 5, "mode": "standard"},
+        read_timeout=900,
+        retries={"max_attempts": 2, "mode": "standard"},
         request_checksum_calculation="when_required",
         response_checksum_validation="when_required",
-    )
-
-
-def _transfer_config():
-    from boto3.s3.transfer import TransferConfig
-
-    return TransferConfig(
-        multipart_threshold=8 * 1024 * 1024,
-        multipart_chunksize=8 * 1024 * 1024,
-        max_concurrency=2,
-        use_threads=True,
     )
 
 
@@ -82,17 +70,36 @@ class StorageUnavailable(RuntimeError):
     """Raised when production has no object store. The message is not client-facing."""
 
 
-def upload_file_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> dict:
-    """Upload raw bytes to S3 (or a local dev fallback). Never returns a public URL."""
-    if enabled():
-        import io
+def public_failure_detail(exc: BaseException) -> str:
+    """A short banner message. Includes the S3 error code, not the request."""
+    code = ""
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        err = response.get("Error")
+        if isinstance(err, dict) and err.get("Code"):
+            code = str(err["Code"])
+    if not code:
+        code = type(exc).__name__
+    token = "".join(ch for ch in code if ch.isalnum() or ch in "._-")[:64]
+    if not token:
+        return "File storage failed"
+    return f"File storage failed ({token})"
 
-        _get_client().upload_fileobj(
-            io.BytesIO(data),
-            settings.aws_s3_bucket,
-            key,
-            ExtraArgs={"ContentType": content_type},
-            Config=_transfer_config(),
+
+def upload_file_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> dict:
+    """Upload raw bytes to S3 (or a local dev fallback). Never returns a public URL.
+
+    One PutObject, including for a coursebook. The managed multipart uploader
+    is a different API from the PutObject that already stores text files, and
+    a failure there was reported as a bare 502.
+    """
+    if enabled():
+        _get_client().put_object(
+            Bucket=settings.aws_s3_bucket,
+            Key=key,
+            Body=data,
+            ContentLength=len(data),
+            ContentType=content_type,
         )
         logger.info("Uploaded %d bytes to object storage", len(data))
         return {
